@@ -1,0 +1,124 @@
+# ==========================================
+# 域名部署专用 Docker Compose 配置
+# 支持自定义域名和HTTPS
+# ==========================================
+
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: stock-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_platform}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+      TZ: ${TZ:-Asia/Shanghai}
+    # 不暴露端口到宿主机，只内部访问
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-@Syh20050608}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: stock-redis
+    restart: unless-stopped
+    # 不暴露端口到宿主机
+    volumes:
+      - redis_data:/data
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # 后端服务
+  backend:
+    build:
+      context: ./stock-backend
+      dockerfile: Dockerfile
+    container_name: stock-backend
+    restart: unless-stopped
+    # 不暴露端口到宿主机
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SERVER_PORT: 9090
+      SERVER_SERVLET_CONTEXT_PATH: /api
+      FILE_UPLOAD_DIR: /app/uploads
+      TZ: ${TZ:-Asia/Shanghai}
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms512m -Xmx1024m -Dfile.encoding=UTF-8"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:9090/api/stocks/public/list > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: stock-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"  # HTTPS端口
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro  # SSL证书目录
+      - frontend_dist:/usr/share/nginx/html:ro  # 前端构建文件
+    depends_on:
+      - backend
+    networks:
+      - stock-network
+
+  # 前端构建服务（构建完成后退出）
+  frontend-build:
+    build:
+      context: ./stock-frontend
+      dockerfile: Dockerfile
+    container_name: stock-frontend-build
+    volumes:
+      - frontend_dist:/app/dist
+    command: cp -r /app/dist/. /output/
+    networks:
+      - stock-network
+
+volumes:
+  mysql_data:
+  redis_data:
+  uploads_data:
+  frontend_dist:
+
+networks:
+  stock-network:
+    driver: bridge
