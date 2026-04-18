@@ -1,0 +1,102 @@
+server:
+  port: 9090
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: stock-platform
+  
+  datasource:
+    url: jdbc:mysql://localhost:3306/stock_platform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: '@Syh20050608'
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+    open-in-view: false
+  
+  redis:
+    host: localhost
+    port: 6379
+    password: 
+    database: 0
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+    # 缓存配置
+    cache:
+      type: redis
+      redis:
+        time-to-live: 1800000  # 默认缓存过期时间 30 分钟
+        cache-null-values: false
+        use-key-prefix: true
+        key-prefix: "stock:"
+  
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false
+      write-bigdecimal-as-plain: true
+    generator:
+      write-numbers-as-strings: false
+  
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+# JWT配置
+jwt:
+  secret: stockPlatformSecretKey2024!@#$%^&*()_+
+  expiration: 86400000  # 24小时
+  header: Authorization
+  prefix: Bearer
+
+# 股票数据配置
+stock:
+  data:
+    source: sina  # 新浪数据源
+    update-interval: 5000  # 实时数据更新间隔(毫秒)
+
+# 日志配置
+logging:
+  level:
+    com.stock.platform: INFO
+    org.springframework.security: INFO
+    com.stock.platform.service.StockDataService: ERROR
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  charset:
+    console: UTF-8
+
+# SpringDoc OpenAPI配置
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+
+# 文件上传配置
+file:
+  upload-dir: uploads
+  avatar-max-size: 2097152  # 2MB

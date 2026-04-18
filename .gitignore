@@ -1,0 +1,98 @@
+# ==========================================
+# MarketPulse 股票平台 - Git 忽略配置
+# ==========================================
+
+# ------------------------------------------
+# 后端构建输出
+# ------------------------------------------
+stock-backend/target/
+stock-backend/*.jar
+stock-backend/*.war
+stock-backend/*.ear
+stock-backend/*.class
+
+# ------------------------------------------
+# Maven
+# ------------------------------------------
+stock-backend/.mvn/timing.properties
+stock-backend/.mvn/wrapper/maven-wrapper.jar
+stock-backend/pom.xml.tag
+stock-backend/pom.xml.releaseBackup
+stock-backend/pom.xml.versionsBackup
+stock-backend/pom.xml.next
+stock-backend/release.properties
+stock-backend/dependency-reduced-pom.xml
+stock-backend/buildNumber.properties
+stock-backend/.flattened-pom.xml
+
+# ------------------------------------------
+# 前端构建输出（本地开发时）
+# ------------------------------------------
+stock-frontend/node_modules/
+stock-frontend/dist/
+stock-frontend/*.local
+
+# ------------------------------------------
+# 日志文件
+# ------------------------------------------
+*.log
+logs/
+log/
+
+# ------------------------------------------
+# 上传文件
+# ------------------------------------------
+stock-backend/uploads/
+uploads/
+avatars/
+
+# ------------------------------------------
+# 数据库备份
+# ------------------------------------------
+backups/
+*.sql.gz
+*.dump
+
+# ------------------------------------------
+# IDE 配置文件
+# ------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ------------------------------------------
+# 操作系统文件
+# ------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------
+# 环境变量文件（包含敏感信息）
+# ------------------------------------------
+.env.local
+.env.*.local
+
+# ------------------------------------------
+# 测试报告
+# ------------------------------------------
+test-output/
+surefire-reports/
+failsafe-reports/
+
+# ------------------------------------------
+# 临时文件
+# ------------------------------------------
+tmp/
+temp/
+*.tmp
+*.temp
+*.cache
