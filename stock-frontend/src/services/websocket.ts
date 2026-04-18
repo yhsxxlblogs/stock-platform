@@ -15,8 +15,24 @@ export enum WebSocketStatus {
 }
 
 // WebSocket 配置
+// 生产环境使用相对路径，开发环境使用完整地址
+const getWebSocketUrl = () => {
+  const envUrl = import.meta.env.VITE_WS_URL
+  if (envUrl) {
+    // 如果是相对路径，根据当前页面协议自动选择 ws/wss
+    if (envUrl.startsWith('ws://localhost/') || envUrl.startsWith('wss://localhost/')) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      return envUrl.replace(/^wss?:\/\/localhost/, `${protocol}//${window.location.host}`)
+    }
+    return envUrl
+  }
+  // 默认使用相对路径
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}/api/ws/stock`
+}
+
 const WS_CONFIG = {
-  url: import.meta.env.VITE_WS_URL || 'ws://localhost:9090/api/ws/stock',
+  url: getWebSocketUrl(),
   reconnectInterval: 5000,  // 重连间隔 5秒
   maxReconnectAttempts: 10, // 最大重连次数
   heartbeatInterval: 30000  // 心跳间隔 30秒
