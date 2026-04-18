@@ -3,8 +3,6 @@
 # 适用于生产服务器环境
 # ==========================================
 
-version: '3.8'
-
 services:
   # MySQL 数据库
   mysql:
@@ -108,9 +106,9 @@ services:
     container_name: stock-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
       # 如果需要 HTTPS，取消下面的注释
-      # - "443:443"
+      # - "8443:443"
     depends_on:
       backend:
         condition: service_healthy
