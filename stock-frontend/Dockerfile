@@ -24,8 +24,7 @@ RUN apk add --no-cache wget
 # 从构建阶段复制构建好的文件
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# 复制 nginx 配置
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 注意：nginx 配置通过 docker-compose 挂载，不要在这里复制
 
 # 暴露端口
 EXPOSE 80

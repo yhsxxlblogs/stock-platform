@@ -3,8 +3,6 @@
 # 支持自定义域名和HTTPS
 # ==========================================
 
-version: '3.8'
-
 services:
   # MySQL 数据库
   mysql:
@@ -17,7 +15,6 @@ services:
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
       TZ: ${TZ:-Asia/Shanghai}
-    # 不暴露端口到宿主机，只内部访问
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -36,7 +33,6 @@ services:
     image: redis:7-alpine
     container_name: stock-redis
     restart: unless-stopped
-    # 不暴露端口到宿主机
     volumes:
       - redis_data:/data
     networks:
@@ -55,7 +51,6 @@ services:
       dockerfile: Dockerfile
     container_name: stock-backend
     restart: unless-stopped
-    # 不暴露端口到宿主机
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: root
@@ -84,40 +79,39 @@ services:
       retries: 3
       start_period: 120s
 
-  # Nginx 反向代理
-  nginx:
-    image: nginx:alpine
-    container_name: stock-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"  # HTTPS端口
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro  # SSL证书目录
-      - frontend_dist:/usr/share/nginx/html:ro  # 前端构建文件
-    depends_on:
-      - backend
-    networks:
-      - stock-network
-
-  # 前端构建服务（构建完成后退出）
-  frontend-build:
+  # 前端服务（Nginx）
+  frontend:
     build:
       context: ./stock-frontend
       dockerfile: Dockerfile
-    container_name: stock-frontend-build
+      # 构建时传入域名配置
+      args:
+        - NGINX_CONF=nginx-domain.conf
+    container_name: stock-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
-      - frontend_dist:/app/dist
-    command: cp -r /app/dist/. /output/
+      # 使用外部 nginx 配置覆盖内部配置
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      backend:
+        condition: service_healthy
     networks:
       - stock-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:80/ > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   mysql_data:
   redis_data:
   uploads_data:
-  frontend_dist:
 
 networks:
   stock-network:
