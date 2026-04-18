@@ -63,9 +63,9 @@ services:
       dockerfile: Dockerfile
     container_name: stock-backend
     restart: unless-stopped
-    # 服务器上不直接暴露后端端口，只通过 Nginx 访问
-    # ports:
-    #   - "9090:9090"
+    # 只绑定本地 127.0.0.1，供宝塔反向代理使用
+    ports:
+      - "127.0.0.1:9090:9090"
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: root
