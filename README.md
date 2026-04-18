@@ -145,7 +145,12 @@ npm run build
 
 ```
 stock-platform/
-├── stock-backend/                 # Spring Boot后端
+├── 📁 scripts/                    # 数据库管理脚本
+│   ├── backup-database.sh/bat    # 数据库备份
+│   ├── migrate-database.sh/bat   # 数据库迁移
+│   └── sync_stocks.sql           # 股票数据同步SQL
+│
+├── 📁 stock-backend/              # Spring Boot后端
 │   ├── src/main/java/com/stock/platform/
 │   │   ├── config/               # 配置类（WebSocket、Security等）
 │   │   ├── controller/           # REST API控制器
@@ -162,7 +167,7 @@ stock-platform/
 │   ├── pom.xml                   # Maven配置
 │   └── mvnw/mvnw.cmd             # Maven Wrapper
 │
-├── stock-frontend/               # Vue3前端
+├── 📁 stock-frontend/             # Vue3前端
 │   ├── src/
 │   │   ├── api/                  # API接口封装
 │   │   ├── views/                # 页面组件
@@ -175,8 +180,11 @@ stock-platform/
 │   ├── nginx.conf                # Nginx配置
 │   └── package.json              # NPM配置
 │
-├── docker-compose.yml            # Docker编排配置
-├── docker-compose.dev.yml        # 开发环境配置
+├── docker-compose.yml            # Docker编排配置（主配置）
+├── docker-compose.simple.yml     # 简化配置（低配服务器）
+├── deploy.sh / deploy.bat        # 一键部署脚本
+├── .env                          # 环境变量配置
+├── .gitignore                    # Git忽略配置
 ├── init.sql                      # 数据库初始化脚本
 ├── mysql.cnf                     # MySQL配置
 └── README.md                     # 项目说明
@@ -269,17 +277,54 @@ http://localhost:9090/api/swagger-ui.html
 
 完整数据库文档见：[DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)
 
+## 数据管理
+
+### 数据库备份
+
+```bash
+# Linux/macOS
+./scripts/backup-database.sh
+
+# Windows
+.\scripts\backup-database.bat
+
+# 备份文件生成在: ./backups/stock_platform_backup_20260118_143022.sql.gz
+```
+
+### 数据库迁移
+
+将当前 Docker 数据库迁移到用户指定的 MySQL：
+
+```bash
+# Linux/macOS
+./scripts/migrate-database.sh
+
+# Windows
+.\scripts\migrate-database.bat
+```
+
+### 股票数据同步
+
+首次部署时，系统会自动将 `stock_basic` 表数据同步到 `stocks` 表。如需手动同步：
+
+```bash
+# Linux/macOS
+./scripts/init-database.sh
+```
+
 ## 开发指南
 
 ### 开发环境启动
 
 ```bash
-# 使用开发环境配置（支持热更新）
-docker-compose -f docker-compose.dev.yml up -d
+# 后端启动
+cd stock-backend
+./mvnw spring-boot:run
 
-# 或使用脚本
-./dev-start.sh  # Linux/Mac
-dev-start.bat   # Windows
+# 前端启动
+cd stock-frontend
+npm install
+npm run dev
 ```
 
 ### 代码规范
