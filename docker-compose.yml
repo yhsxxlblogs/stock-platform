@@ -1,4 +1,7 @@
-version: '3.8'
+# ==========================================
+# Stock Platform Docker Compose 配置
+# 简化版 - 适用于生产环境
+# ==========================================
 
 services:
   # MySQL 数据库
@@ -8,16 +11,10 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_platform}
-      MYSQL_CHARSET: utf8mb4
-      MYSQL_COLLATION: utf8mb4_unicode_ci
-      TZ: ${TZ:-Asia/Shanghai}
-    ports:
-      - "3308:3306"
+      MYSQL_DATABASE: stock_platform
+      TZ: Asia/Shanghai
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
     networks:
       - stock-network
     healthcheck:
@@ -26,20 +23,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
 
   # Redis 缓存
   redis:
     image: redis:7-alpine
     container_name: stock-redis
     restart: unless-stopped
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
     networks:
       - stock-network
     healthcheck:
@@ -48,44 +37,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    sysctls:
-      - net.core.somaxconn=1024
 
   # 后端服务
   backend:
-    build:
-      context: ./stock-backend
-      dockerfile: Dockerfile
+    image: ${DOCKER_REGISTRY:-}stock-platform-backend:latest
     container_name: stock-backend
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     environment:
-      # 数据库配置
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/stock_platform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
-      # Redis 配置
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
-      # 服务器配置
-      SERVER_PORT: 9090
-      SERVER_SERVLET_CONTEXT_PATH: /api
-      # 文件上传路径
-      FILE_UPLOAD_DIR: /app/uploads
-      # 时区
-      TZ: ${TZ:-Asia/Shanghai}
-      # 使用 Docker 配置文件
       SPRING_PROFILES_ACTIVE: docker
-      # JVM 配置
-      JAVA_OPTS: "-Xms512m -Xmx1024m -Dfile.encoding=UTF-8"
-      # 禁用代理（避免健康检查失败）
-      HTTP_PROXY: ""
-      http_proxy: ""
-      HTTPS_PROXY: ""
-      https_proxy: ""
-    volumes:
-      - uploads_data:/app/uploads
+      JAVA_OPTS: "-Xms512m -Xmx1024m"
     depends_on:
       mysql:
         condition: service_healthy
@@ -102,44 +69,21 @@ services:
 
   # 前端服务
   frontend:
-    build:
-      context: ./stock-frontend
-      dockerfile: Dockerfile
+    image: ${DOCKER_REGISTRY:-}stock-platform-frontend:latest
     container_name: stock-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
     networks:
       - stock-network
-    environment:
-      # 禁用代理（避免健康检查失败）
-      HTTP_PROXY: ""
-      http_proxy: ""
-      HTTPS_PROXY: ""
-      https_proxy: ""
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:80/ > /dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
-# 数据卷
 volumes:
   mysql_data:
-    driver: local
   redis_data:
-    driver: local
-  uploads_data:
-    driver: local
 
-# 网络
 networks:
   stock-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
