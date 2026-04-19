@@ -38,8 +38,8 @@ public class StockDataScheduler {
     @Autowired
     private StockSyncService stockSyncService;
 
-    // 线程池用于并行更新实时数据
-    private final ExecutorService executorService = Executors.newFixedThreadPool(4);
+    // 线程池用于并行更新实时数据 - 2核服务器使用2线程
+    private final ExecutorService executorService = Executors.newFixedThreadPool(2);
 
     // 每批处理的股票数量
     private static final int BATCH_SIZE = 100;
@@ -87,8 +87,8 @@ public class StockDataScheduler {
 
                 futures.add(future);
 
-                // 每4批等待一次，避免同时发起太多请求
-                if (futures.size() >= 4) {
+                // 每2批等待一次，避免同时发起太多请求（2核服务器）
+                if (futures.size() >= 2) {
                     @SuppressWarnings("null")
                     CompletableFuture<Void>[] futureArray = futures.toArray(new CompletableFuture[0]);
                     CompletableFuture.allOf(futureArray).join();

@@ -15,22 +15,23 @@ COPY . .
 # 构建项目
 RUN npm run build
 
-# 生产阶段
+# 生产阶段 - 使用轻量级nginx
 FROM nginx:alpine
 
 # 安装 wget 用于健康检查
 RUN apk add --no-cache wget
 
+# 复制自定义nginx配置
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # 从构建阶段复制构建好的文件
 COPY --from=build /app/dist /usr/share/nginx/html
-
-# 注意：nginx 配置通过 docker-compose 挂载，不要在这里复制
 
 # 暴露端口
 EXPOSE 80
 
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=3s --start-period=10s --retries=3 \
     CMD wget -q -O - http://127.0.0.1:80/ > /dev/null 2>&1 || exit 1
 
 # 启动 nginx

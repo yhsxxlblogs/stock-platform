@@ -11,8 +11,8 @@ COPY . .
 # 构建项目
 RUN mvn clean package -DskipTests -B
 
-# 生产阶段
-FROM eclipse-temurin:17-jdk-alpine
+# 生产阶段 - 使用更轻量的JRE
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # 安装必要的字体库和 wget
@@ -34,8 +34,8 @@ COPY --from=build /app/target/*.jar app.jar
 EXPOSE 9090
 
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=3s --start-period=120s --retries=3 \
     CMD wget -q -O - http://localhost:9090/api/stocks/public/list > /dev/null 2>&1 || exit 1
 
-# 启动命令
-ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8", "-jar", "app.jar"]
+# 启动命令 - 使用优化的JVM参数
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

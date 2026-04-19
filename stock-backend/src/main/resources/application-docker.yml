@@ -14,11 +14,11 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:@Syh20050608}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
+      maximum-pool-size: 10
+      minimum-idle: 3
       connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
+      idle-timeout: 300000
+      max-lifetime: 900000
   
   jpa:
     hibernate:
@@ -38,9 +38,9 @@ spring:
     timeout: 3000ms
     lettuce:
       pool:
-        max-active: 8
-        max-idle: 8
-        min-idle: 0
+        max-active: 4
+        max-idle: 4
+        min-idle: 1
   
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss

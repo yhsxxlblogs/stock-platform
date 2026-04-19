@@ -18,17 +18,24 @@ export enum WebSocketStatus {
 // 生产环境使用相对路径，开发环境使用完整地址
 const getWebSocketUrl = () => {
   const envUrl = import.meta.env.VITE_WS_URL
-  if (envUrl) {
-    // 如果是相对路径，根据当前页面协议自动选择 ws/wss
-    if (envUrl.startsWith('ws://localhost/') || envUrl.startsWith('wss://localhost/')) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      return envUrl.replace(/^wss?:\/\/localhost/, `${protocol}//${window.location.host}`)
-    }
-    return envUrl
-  }
-  // 默认使用相对路径
+  
+  // 根据当前页面协议自动选择 ws/wss
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/api/ws/stock`
+  const host = window.location.host
+  
+  if (envUrl) {
+    // 如果以 / 开头，是相对路径，需要拼接完整URL
+    if (envUrl.startsWith('/')) {
+      return `${protocol}//${host}${envUrl}`
+    }
+    // 如果是完整的 ws/wss URL，直接返回
+    if (envUrl.startsWith('ws://') || envUrl.startsWith('wss://')) {
+      return envUrl
+    }
+  }
+  
+  // 默认使用相对路径
+  return `${protocol}//${host}/api/ws/stock`
 }
 
 const WS_CONFIG = {

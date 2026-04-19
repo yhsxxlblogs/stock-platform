@@ -1,6 +1,6 @@
 # ==========================================
 # Stock Platform Docker Compose 配置
-# 简化版 - 适用于生产环境
+# 针对 2核2G 服务器优化
 # ==========================================
 
 services:
@@ -11,48 +11,79 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
-      MYSQL_DATABASE: stock_platform
-      TZ: Asia/Shanghai
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_platform}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+      TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
     networks:
       - stock-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-@Syh20050608}"]
-      interval: 10s
-      timeout: 5s
+      interval: 15s
+      timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # Redis 缓存
   redis:
     image: redis:7-alpine
     container_name: stock-redis
     restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis_data:/data
     networks:
       - stock-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   # 后端服务
   backend:
-    image: ${DOCKER_REGISTRY:-}stock-platform-backend:latest
+    build:
+      context: ./stock-backend
+      dockerfile: Dockerfile
     container_name: stock-backend
     restart: unless-stopped
     ports:
       - "127.0.0.1:9090:9090"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/stock_platform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      SERVER_PORT: 9090
+      SERVER_SERVLET_CONTEXT_PATH: /api
+      FILE_UPLOAD_DIR: /app/uploads
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: docker
-      JAVA_OPTS: "-Xms512m -Xmx1024m"
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Dfile.encoding=UTF-8"
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -62,14 +93,24 @@ services:
       - stock-network
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:9090/api/stocks/public/list > /dev/null 2>&1 || exit 1"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 640M
+        reservations:
+          cpus: '0.5'
+          memory: 384M
 
-  # 前端服务
+  # 前端服务（Nginx）
   frontend:
-    image: ${DOCKER_REGISTRY:-}stock-platform-frontend:latest
+    build:
+      context: ./stock-frontend
+      dockerfile: Dockerfile
     container_name: stock-frontend
     restart: unless-stopped
     ports:
@@ -79,11 +120,32 @@ services:
         condition: service_healthy
     networks:
       - stock-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:80/ > /dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
 volumes:
   mysql_data:
+    driver: local
   redis_data:
+    driver: local
+  uploads_data:
+    driver: local
 
 networks:
   stock-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
