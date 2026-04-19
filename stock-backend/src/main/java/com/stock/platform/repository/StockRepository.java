@@ -20,4 +20,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     List<Stock> searchStocks(@Param("keyword") String keyword);
 
     List<Stock> findByStatus(Integer status);
+
+    /**
+     * 检查股票是否存在
+     */
+    boolean existsBySymbol(String symbol);
 }
