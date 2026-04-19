@@ -361,8 +361,10 @@ const addToFavorites = async (stock: Stock) => {
     await fetchFavorites()
   } catch (error: any) {
     if (error.response?.status === 401) {
-      ElMessage.error('请先登录后再添加自选股')
-      router.push('/login')
+      ElMessage.warning('🔒 该功能需要登录后才能使用，正在跳转登录页面...')
+      setTimeout(() => {
+        router.push('/login')
+      }, 1500)
     } else {
       ElMessage.error('添加失败，请重试')
     }

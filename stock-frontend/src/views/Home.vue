@@ -168,8 +168,29 @@
 
     <!-- 自选股行情 -->
     <div class="hot-stocks-section">
-      <h3>我的自选股</h3>
-      <el-table :data="favoriteStocks" style="width: 100%" v-loading="favoritesLoading" empty-text="暂无自选股，请在股票详情页添加">
+      <div class="section-header">
+        <h3>我的自选股</h3>
+        <el-tag v-if="!isLoggedIn" type="warning" effect="dark" class="login-tip">
+          <el-icon><Lock /></el-icon>
+          登录后查看
+        </el-tag>
+      </div>
+      
+      <!-- 未登录提示 -->
+      <div v-if="!isLoggedIn" class="login-required-notice">
+        <el-icon size="48" color="#909399"><Lock /></el-icon>
+        <p class="notice-title">🔒 该功能需要登录后才能使用</p>
+        <p class="notice-desc">登录后可以添加自选股，实时追踪您关注的股票行情</p>
+        <el-button type="primary" size="large" @click="$router.push('/login')">
+          <el-icon><User /></el-icon>
+          立即登录
+        </el-button>
+        <p class="notice-sub">
+          还没有账号？<el-link type="primary" @click="$router.push('/register')">立即注册</el-link>
+        </p>
+      </div>
+      
+      <el-table v-else :data="favoriteStocks" style="width: 100%" v-loading="favoritesLoading" empty-text="暂无自选股，请在股票详情页添加">
         <el-table-column prop="symbol" label="代码" width="100">
           <template #default="{ row }">
             <el-link type="primary" @click="goToStockDetail(row.symbol)">{{ row.symbol }}</el-link>
@@ -211,9 +232,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Lock, User } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/user'
 import { getStockList, getMarketIndex, searchStocks, suggestStocks } from '@/api/stock'
 import { getFavorites } from '@/api/favorites'
 import { wsService } from '@/services/websocket'
@@ -221,6 +243,8 @@ import type { Stock, MarketIndex, StockSuggestion } from '@/api/stock'
 import type { FavoriteStock } from '@/api/favorites'
 
 const router = useRouter()
+const userStore = useUserStore()
+const isLoggedIn = computed(() => userStore.isLoggedIn)
 const searchKeyword = ref('')
 const loading = ref(false)
 const searchLoading = ref(false)
@@ -671,5 +695,53 @@ onUnmounted(() => {
   background-color: #ecf5ff;
   padding: 0 2px;
   border-radius: 3px;
+}
+
+/* 分区头部 */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.login-tip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 登录提示区域 */
+.login-required-notice {
+  text-align: center;
+  padding: 60px 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+  border-radius: 12px;
+  border: 2px dashed #c0c4cc;
+}
+
+.notice-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 16px 0 8px;
+}
+
+.notice-desc {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 24px;
+}
+
+.notice-sub {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 16px;
 }
 </style>

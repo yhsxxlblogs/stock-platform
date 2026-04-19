@@ -1,0 +1,124 @@
+# ==========================================
+# Stock Platform 本地开发部署配置
+# 适用于 Windows/Mac/Linux 本地开发环境
+# ==========================================
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: stock-mysql-local
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-stock_platform}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "3306:3306"  # 本地开发暴露MySQL端口
+    volumes:
+      - mysql_data_local:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    networks:
+      - stock-network-local
+    # 降低内存使用
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=128M
+      --innodb-log-buffer-size=8M
+      --key-buffer-size=16M
+      --max-connections=50
+      --performance-schema=OFF
+      --skip-host-cache
+      --skip-name-resolve
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-@Syh20050608}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: stock-redis-local
+    restart: unless-stopped
+    ports:
+      - "6379:6379"  # 本地开发暴露Redis端口
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis_data_local:/data
+    networks:
+      - stock-network-local
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # 后端服务
+  backend:
+    build:
+      context: ./stock-backend
+      dockerfile: Dockerfile
+    container_name: stock-backend-local
+    restart: unless-stopped
+    ports:
+      - "9090:9090"  # 本地开发暴露后端端口
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SERVER_PORT: 9090
+      SERVER_SERVLET_CONTEXT_PATH: /api
+      FILE_UPLOAD_DIR: /app/uploads
+      TZ: ${TZ:-Asia/Shanghai}
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Dfile.encoding=UTF-8"
+    volumes:
+      - uploads_data_local:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stock-network-local
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:9090/api/stocks/public/list > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  # 前端服务（Nginx）
+  frontend:
+    build:
+      context: ./stock-frontend
+      dockerfile: Dockerfile
+    container_name: stock-frontend-local
+    restart: unless-stopped
+    ports:
+      - "8080:80"  # 本地访问 http://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - stock-network-local
+
+volumes:
+  mysql_data_local:
+    driver: local
+  redis_data_local:
+    driver: local
+  uploads_data_local:
+    driver: local
+
+networks:
+  stock-network-local:
+    driver: bridge
