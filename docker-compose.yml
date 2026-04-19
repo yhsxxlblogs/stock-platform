@@ -17,7 +17,6 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
     networks:
       - stock-network
