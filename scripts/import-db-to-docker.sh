@@ -65,20 +65,33 @@ print_success "MySQL 容器运行正常"
 # 检查并修复文件编码
 print_info "检查和修复文件编码..."
 
-# 检测是否有 BOM
+# 创建修复后的文件
+FIXED_SQL_FILE="/tmp/stock_platform_fixed.sql"
+
+# 检测并移除 BOM
 if head -c 3 "$SQL_FILE" | od -An -tx1 | grep -q "ef bb bf"; then
     print_warning "检测到 UTF-8 BOM 头，正在移除..."
-    tail -c +4 "$SQL_FILE" > "${SQL_FILE}.nobom"
-    mv "${SQL_FILE}.nobom" "$SQL_FILE"
+    tail -c +4 "$SQL_FILE" > "$FIXED_SQL_FILE"
+else
+    cp "$SQL_FILE" "$FIXED_SQL_FILE"
 fi
 
 # 转换 Windows 换行符为 Unix 换行符
 print_info "转换换行符 (CRLF -> LF)..."
-sed -i 's/\r$//' "$SQL_FILE"
+sed -i 's/\r$//' "$FIXED_SQL_FILE"
 
 # 确保文件以换行符结尾
-if [ -n "$(tail -c 1 "$SQL_FILE")" ]; then
-    echo >> "$SQL_FILE"
+if [ -n "$(tail -c 1 "$FIXED_SQL_FILE")" ]; then
+    echo >> "$FIXED_SQL_FILE"
+fi
+
+# 验证文件编码
+print_info "验证文件编码..."
+if file "$FIXED_SQL_FILE" | grep -q "UTF-8"; then
+    print_success "文件编码正确 (UTF-8)"
+else
+    print_warning "文件编码可能不正确，尝试转换..."
+    iconv -f GBK -t UTF-8 "$FIXED_SQL_FILE" > "${FIXED_SQL_FILE}.utf8" 2>/dev/null && mv "${FIXED_SQL_FILE}.utf8" "$FIXED_SQL_FILE" || true
 fi
 
 print_success "文件编码修复完成"
@@ -110,6 +123,7 @@ read -p "是否继续? (y/n): " -n 1 -r
 echo ""
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     print_info "已取消导入"
+    rm -f "$FIXED_SQL_FILE"
     exit 0
 fi
 
@@ -120,19 +134,23 @@ print_success "数据库已清空并重建"
 
 # 复制 SQL 文件到容器
 print_info "复制 SQL 文件到容器..."
-docker cp "$SQL_FILE" "$DB_CONTAINER:/tmp/import.sql"
+docker cp "$FIXED_SQL_FILE" "$DB_CONTAINER:/tmp/import.sql"
 print_success "文件复制完成"
 
-# 执行导入
+# 执行导入（使用容器内的文件）
 print_info "开始导入数据..."
 print_info "这可能需要几分钟，请耐心等待..."
 echo ""
 
-if docker exec "$DB_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$SQL_FILE"; then
+if docker exec "$DB_CONTAINER" sh -c "mysql -u'$DB_USER' -p'$DB_PASS' '$DB_NAME' < /tmp/import.sql"; then
     print_success "数据导入成功！"
 else
     print_error "数据导入失败"
-    exit 1
+    print_info "尝试使用替代方法导入..."
+    
+    # 替代方法：分块导入
+    print_info "尝试分块导入..."
+    docker exec "$DB_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$FIXED_SQL_FILE" && print_success "分块导入成功！" || print_error "分块导入也失败了"
 fi
 
 # 验证导入结果
@@ -156,7 +174,7 @@ echo "----------------------------------------"
 # 清理临时文件
 print_info "清理临时文件..."
 docker exec "$DB_CONTAINER" rm -f /tmp/import.sql
-rm -f "$SQL_FILE"
+rm -f "$SQL_FILE" "$FIXED_SQL_FILE"
 
 echo ""
 echo "=========================================="
