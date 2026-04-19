@@ -3,8 +3,8 @@ package com.stock.platform.controller;
 import com.stock.platform.dto.*;
 import com.stock.platform.entity.Stock;
 import com.stock.platform.entity.StockBasic;
+import com.stock.platform.repository.StockBasicRepository;
 import com.stock.platform.service.EastMoneyStockService;
-import com.stock.platform.service.StockBasicSyncService;
 import com.stock.platform.service.StockDataService;
 import com.stock.platform.service.StockSyncService;
 import com.stock.platform.service.TencentStockDataService;
@@ -37,10 +37,10 @@ public class StockController {
     private EastMoneyStockService eastMoneyStockService;
 
     @Autowired
-    private StockBasicSyncService stockBasicSyncService;
+    private StockSyncService stockSyncService;
 
     @Autowired
-    private StockSyncService stockSyncService;
+    private StockBasicRepository stockBasicRepository;
 
     @GetMapping("/public/list")
     public ResponseEntity<ApiResponse<List<StockDTO>>> getAllStocks() {
@@ -51,7 +51,7 @@ public class StockController {
     @GetMapping("/public/{symbol}")
     public ResponseEntity<ApiResponse<StockDTO>> getStockBySymbol(@PathVariable String symbol) {
         // 从数据库查找
-        StockBasic stockBasic = stockBasicSyncService.getStockBySymbol(symbol);
+        StockBasic stockBasic = stockBasicRepository.findBySymbol(symbol).orElse(null);
 
         if (stockBasic != null) {
             // 从腾讯API获取实时数据
@@ -94,7 +94,10 @@ public class StockController {
             @RequestParam(defaultValue = "10") int limit) {
 
         // 从数据库搜索
-        List<StockBasic> suggestions = stockBasicSyncService.searchStocks(keyword, limit);
+        List<StockBasic> suggestions = stockBasicRepository.searchByKeyword(keyword);
+        if (suggestions.size() > limit) {
+            suggestions = suggestions.subList(0, limit);
+        }
 
         List<Map<String, String>> result = suggestions.stream()
                 .map(stock -> {
@@ -113,7 +116,10 @@ public class StockController {
     @GetMapping("/public/search")
     public ResponseEntity<ApiResponse<List<StockDTO>>> searchStocks(@RequestParam String keyword) {
         // 从数据库搜索股票
-        List<StockBasic> searchResults = stockBasicSyncService.searchStocks(keyword, 20);
+        List<StockBasic> searchResults = stockBasicRepository.searchByKeyword(keyword);
+        if (searchResults.size() > 20) {
+            searchResults = searchResults.subList(0, 20);
+        }
 
         // 批量获取实时数据
         List<StockDTO> stocks = new ArrayList<>();
@@ -219,7 +225,7 @@ public class StockController {
     @GetMapping("/public/{symbol}/detail")
     public ResponseEntity<ApiResponse<StockDetailDTO>> getStockDetail(@PathVariable String symbol) {
         // 从数据库获取股票基本信息
-        StockBasic basicInfo = stockBasicSyncService.getStockBySymbol(symbol);
+        StockBasic basicInfo = stockBasicRepository.findBySymbol(symbol).orElse(null);
 
         if (basicInfo == null) {
             // 如果不存在，尝试从数据库获取旧数据
@@ -381,12 +387,12 @@ public class StockController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> syncStocks() {
         log.info("手动触发股票列表同步");
 
-        long beforeCount = stockBasicSyncService.getStockCount();
+        long beforeCount = stockBasicRepository.count();
 
         // 异步执行同步，避免阻塞请求
-        new Thread(() -> {
-            stockBasicSyncService.scheduledSync();
-        }).start();
+        CompletableFuture.runAsync(() -> {
+            stockSyncService.manualFullSync();
+        });
 
         Map<String, Object> result = new HashMap<>();
         result.put("beforeCount", beforeCount);
@@ -400,7 +406,7 @@ public class StockController {
      */
     @GetMapping("/public/stock-stats")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStockStats() {
-        long count = stockBasicSyncService.getStockCount();
+        long count = stockBasicRepository.count();
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalCount", count);
