@@ -32,69 +32,48 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM 使用 PowerShell 导出，确保 UTF-8 无 BOM 格式
 echo [INFO] 正在导出数据库...
 echo [INFO] 这可能需要几分钟，请耐心等待...
 echo.
 
-powershell -ExecutionPolicy Bypass -Command "
-    $ErrorActionPreference = 'Stop'
-    
-    $outputFile = '%OUTPUT_FILE%'
-    $tempFile = [System.IO.Path]::GetTempFileName()
-    
-    try {
-        # 执行 mysqldump，直接输出到临时文件
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'mysqldump'
-        $psi.Arguments = @(
-            '--host=%DB_HOST%',
-            '--port=%DB_PORT%',
-            '--user=%DB_USER%',
-            '--password=%DB_PASS%',
-            '--single-transaction',
-            '--quick',
-            '--lock-tables=false',
-            '--set-charset=utf8mb4',
-            '--skip-comments',
-            '--routines',
-            '--triggers',
-            '%DB_NAME%'
-        ) -join ' '
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
-        
-        $process = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $process.StandardOutput.ReadToEnd()
-        $stderr = $process.StandardError.ReadToEnd()
-        $process.WaitForExit()
-        
-        if ($process.ExitCode -ne 0) {
-            Write-Host '[ERROR] mysqldump 执行失败:' -ForegroundColor Red
-            Write-Host $stderr -ForegroundColor Red
-            exit 1
-        }
-        
-        # 以 UTF-8 无 BOM 格式写入文件
-        $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-        [System.IO.File]::WriteAllText($outputFile, $stdout, $utf8NoBom)
-        
-        Write-Host '[SUCCESS] 数据库导出成功!' -ForegroundColor Green
-        
-    } catch {
-        Write-Host '[ERROR] 导出失败:' -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
-        exit 1
-    }
-"
+REM 使用 mysqldump 直接导出，然后通过 PowerShell 处理编码
+set "TEMP_FILE=%TEMP%\stock_platform_temp_%RANDOM%.sql"
+
+mysqldump --host=%DB_HOST% --port=%DB_PORT% --user=%DB_USER% --password=%DB_PASS% --single-transaction --quick --lock-tables=false --set-charset=utf8mb4 --routines --triggers %DB_NAME% > "%TEMP_FILE%"
 
 if %errorlevel% neq 0 (
-    echo [ERROR] 导出失败
+    echo [ERROR] mysqldump 执行失败
+    del "%TEMP_FILE%" 2>nul
     pause
     exit /b 1
 )
+
+echo [INFO] 转换文件编码为 UTF-8 无 BOM...
+
+REM 使用 PowerShell 转换为 UTF-8 无 BOM
+powershell -ExecutionPolicy Bypass -Command "
+    $inputFile = '%TEMP_FILE%'
+    $outputFile = '%OUTPUT_FILE%'
+    
+    # 读取文件内容
+    $content = [System.IO.File]::ReadAllText($inputFile, [System.Text.Encoding]::Default)
+    
+    # 以 UTF-8 无 BOM 格式写入
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($outputFile, $content, $utf8NoBom)
+    
+    Write-Host '[SUCCESS] 数据库导出成功!' -ForegroundColor Green
+"
+
+if %errorlevel% neq 0 (
+    echo [ERROR] 编码转换失败
+    del "%TEMP_FILE%" 2>nul
+    pause
+    exit /b 1
+)
+
+REM 清理临时文件
+del "%TEMP_FILE%" 2>nul
 
 REM 显示文件信息
 echo.
