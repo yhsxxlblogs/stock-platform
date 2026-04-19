@@ -16,7 +16,7 @@ services:
       MYSQL_COLLATION: utf8mb4_unicode_ci
       TZ: ${TZ:-Asia/Shanghai}
     ports:
-      - "3306:3306"  # 本地开发暴露MySQL端口
+      - "3307:3306"  # 本地开发暴露MySQL端口（避免冲突）
     volumes:
       - mysql_data_local:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -59,11 +59,9 @@ services:
       retries: 5
       start_period: 30s
 
-  # 后端服务
+  # 后端服务 - 使用已有镜像
   backend:
-    build:
-      context: ./stock-backend
-      dockerfile: Dockerfile
+    image: stock-platform-backend:latest
     container_name: stock-backend-local
     restart: unless-stopped
     ports:
@@ -91,16 +89,14 @@ services:
       - stock-network-local
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:9090/api/stocks/public/list > /dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 180s
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
 
-  # 前端服务（Nginx）
+  # 前端服务 - 使用已有镜像
   frontend:
-    build:
-      context: ./stock-frontend
-      dockerfile: Dockerfile
+    image: stock-platform-frontend:latest
     container_name: stock-frontend-local
     restart: unless-stopped
     ports:
