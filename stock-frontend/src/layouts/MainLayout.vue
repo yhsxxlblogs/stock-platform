@@ -57,6 +57,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ElMessageBox } from 'element-plus'
+import { TrendCharts, ArrowDown } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
