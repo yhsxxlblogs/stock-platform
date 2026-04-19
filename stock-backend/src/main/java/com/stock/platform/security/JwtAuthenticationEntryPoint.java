@@ -21,12 +21,14 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
                          AuthenticationException authException) throws IOException, ServletException {
-        log.error("Responding with unauthorized error. Message - {}", authException.getMessage());
+        // 只记录日志，不输出烦人的错误信息到前端
+        log.debug("Unauthorized access attempt to: {}", request.getRequestURI());
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-        ApiResponse<?> apiResponse = ApiResponse.error(401, "Unauthorized: " + authException.getMessage());
+        // 返回简洁的中文提示
+        ApiResponse<?> apiResponse = ApiResponse.error(401, "请先登录");
 
         ObjectMapper mapper = new ObjectMapper();
         mapper.writeValue(response.getOutputStream(), apiResponse);
