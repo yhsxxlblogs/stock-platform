@@ -40,7 +40,7 @@ REM Create temp file
 set "TEMP_FILE=%TEMP%\stock_platform_temp_%RANDOM%.sql"
 
 REM Run mysqldump
-mysqldump --host=%DB_HOST% --port=%DB_PORT% --user=%DB_USER% --password=%DB_PASS% --single-transaction --quick --lock-tables=false --set-charset=utf8mb4 --routines --triggers %DB_NAME% > "%TEMP_FILE%"
+mysqldump --host=%DB_HOST% --port=%DB_PORT% --user=%DB_USER% --password=%DB_PASS% --single-transaction --quick --lock-tables=false --routines --triggers %DB_NAME% > "%TEMP_FILE%"
 
 if %errorlevel% neq 0 (
     echo [ERROR] mysqldump failed
@@ -51,31 +51,18 @@ if %errorlevel% neq 0 (
 
 echo [INFO] Converting to UTF-8 without BOM...
 
-REM Create PowerShell script file
-set "PS_SCRIPT=%TEMP%\convert_encoding_%RANDOM%.ps1"
-(
-echo $inputFile = '%TEMP_FILE%'
-echo $outputFile = '%OUTPUT_FILE%'
-echo $content = [System.IO.File]::ReadAllText($inputFile, [System.Text.Encoding]::Default)
-echo $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-echo [System.IO.File]::WriteAllText($outputFile, $content, $utf8NoBom)
-echo Write-Host '[SUCCESS] Export completed!' -ForegroundColor Green
-) > "%PS_SCRIPT%"
-
-REM Run PowerShell script
-powershell -ExecutionPolicy Bypass -File "%PS_SCRIPT%"
+REM Use PowerShell directly with command instead of file
+powershell -ExecutionPolicy Bypass -Command "$inputFile = '%TEMP_FILE%'; $outputFile = '%OUTPUT_FILE%'; $content = [System.IO.File]::ReadAllText($inputFile, [System.Text.Encoding]::Default); $utf8NoBom = New-Object System.Text.UTF8Encoding $false; [System.IO.File]::WriteAllText($outputFile, $content, $utf8NoBom); Write-Host '[SUCCESS] Export completed!' -ForegroundColor Green"
 
 if %errorlevel% neq 0 (
     echo [ERROR] Encoding conversion failed
     if exist "%TEMP_FILE%" del "%TEMP_FILE%"
-    if exist "%PS_SCRIPT%" del "%PS_SCRIPT%"
     pause
     exit /b 1
 )
 
-REM Clean up temp files
+REM Clean up temp file
 if exist "%TEMP_FILE%" del "%TEMP_FILE%"
-if exist "%PS_SCRIPT%" del "%PS_SCRIPT%"
 
 REM Show file info
 echo.
