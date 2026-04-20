@@ -2,6 +2,8 @@ package com.stock.platform.controller;
 
 import com.stock.platform.dto.ApiResponse;
 import com.stock.platform.dto.StockDTO;
+import com.stock.platform.entity.Stock;
+import com.stock.platform.entity.StockRealtimeData;
 import com.stock.platform.entity.User;
 import com.stock.platform.entity.UserFavorite;
 import com.stock.platform.repository.StockRepository;
@@ -90,6 +92,13 @@ public class UserFavoriteController {
                                 .lowPrice(realtimeData.getLowPrice())
                                 .openPrice(realtimeData.getOpenPrice())
                                 .preClose(realtimeData.getPreClose());
+
+                        // 将最新数据更新到数据库（收盘后保留最新数据）
+                        try {
+                            updateRealtimeDataToDatabase(stock, realtimeData);
+                        } catch (Exception e) {
+                            log.warn("更新股票 {} 数据到数据库失败: {}", stock.getSymbol(), e.getMessage());
+                        }
                     } else {
                         // API获取失败，使用数据库缓存的数据
                         realtimeDataRepository.findByStockId(stock.getId()).ifPresent(cached -> {
@@ -116,6 +125,29 @@ public class UserFavoriteController {
         }
 
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
+     * 将API获取的实时数据更新到数据库
+     */
+    private void updateRealtimeDataToDatabase(Stock stock, StockDTO realtimeData) {
+        StockRealtimeData existingData = realtimeDataRepository
+                .findByStockId(stock.getId())
+                .orElse(new StockRealtimeData());
+
+        existingData.setStock(stock);
+        existingData.setCurrentPrice(realtimeData.getCurrentPrice());
+        existingData.setChangePrice(realtimeData.getChangePrice());
+        existingData.setChangePercent(realtimeData.getChangePercent());
+        existingData.setVolume(realtimeData.getVolume());
+        existingData.setAmount(realtimeData.getAmount());
+        existingData.setHighPrice(realtimeData.getHighPrice());
+        existingData.setLowPrice(realtimeData.getLowPrice());
+        existingData.setOpenPrice(realtimeData.getOpenPrice());
+        existingData.setPreClose(realtimeData.getPreClose());
+
+        realtimeDataRepository.save(existingData);
+        log.debug("更新股票 {} 最新数据到数据库", stock.getSymbol());
     }
 
     /**
