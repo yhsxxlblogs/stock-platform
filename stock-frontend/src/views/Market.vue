@@ -476,11 +476,13 @@ onMounted(() => {
 }
 
 .up {
-  color: #f56c6c;
+  color: #ff0000;
+  font-weight: 600;
 }
 
 .down {
-  color: #67c23a;
+  color: #00aa00;
+  font-weight: 600;
 }
 
 .pagination {

@@ -883,6 +883,7 @@ onUnmounted(() => {
 .index-card {
   text-align: center;
   transition: transform 0.3s;
+  overflow: hidden;
 }
 
 .index-card:hover {
@@ -905,16 +906,19 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
+/* 涨跌颜色 - 加深更醒目 */
 .up {
-  color: #f56c6c;
+  color: #ff0000;
+  font-weight: 600;
 }
 
 .down {
-  color: #67c23a;
+  color: #00aa00;
+  font-weight: 600;
 }
 
 .flat {
-  color: #999;
+  color: #666;
 }
 
 .hot-stocks-section {
