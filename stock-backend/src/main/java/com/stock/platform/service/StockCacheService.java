@@ -119,73 +119,47 @@ public class StockCacheService {
         clearMarketIndexCache();
     }
 
-    // ==================== 实时数据缓存（带过期时间） ====================
+    // ==================== K线数据缓存（历史数据，24小时过期） ====================
 
     /**
-     * 缓存股票实时数据（5分钟过期）
+     * 缓存K线数据（24小时过期）
+     * 历史数据高度一致，仅当日线有差异时需要更新
      */
-    public void cacheRealtimeData(String symbol, StockDTO data) {
-        String key = RedisConfig.CACHE_REALTIME_DATA + ":" + symbol;
-        redisCacheService.set(key, data, 5, TimeUnit.MINUTES);
-        log.debug("缓存实时数据: {}", symbol);
+    public void cacheKlineData(String symbol, String period, List<KlineDataDTO> data) {
+        String key = RedisConfig.CACHE_STOCK_KLINE + ":" + symbol + ":" + period;
+        redisCacheService.set(key, data, 24, TimeUnit.HOURS);
+        log.debug("缓存K线数据: {}, 周期: {}, 条数: {}", symbol, period, data.size());
     }
 
     /**
-     * 获取缓存的实时数据
+     * 获取缓存的K线数据
      */
-    public StockDTO getCachedRealtimeData(String symbol) {
-        String key = RedisConfig.CACHE_REALTIME_DATA + ":" + symbol;
-        StockDTO data = redisCacheService.get(key, StockDTO.class);
+    @SuppressWarnings("unchecked")
+    public List<KlineDataDTO> getCachedKlineData(String symbol, String period) {
+        String key = RedisConfig.CACHE_STOCK_KLINE + ":" + symbol + ":" + period;
+        List<KlineDataDTO> data = redisCacheService.get(key, List.class);
         if (data != null) {
-            log.debug("从缓存获取实时数据: {}", symbol);
+            log.debug("从缓存获取K线数据: {}, 周期: {}", symbol, period);
         }
         return data;
     }
 
     /**
-     * 批量缓存实时数据
+     * 清除K线数据缓存
+     * 每日收盘后调用，清除当日缓存以便次日获取最新数据
      */
-    public void cacheRealtimeDataBatch(List<StockDTO> stocks) {
-        for (StockDTO stock : stocks) {
-            if (stock.getSymbol() != null) {
-                cacheRealtimeData(stock.getSymbol(), stock);
-            }
-        }
-        log.debug("批量缓存实时数据: {} 条", stocks.size());
-    }
-
-    /**
-     * 缓存大盘指数（1分钟过期）
-     */
-    public void cacheMarketIndices(List<MarketIndexDTO> indices) {
-        String key = RedisConfig.CACHE_MARKET_INDEX;
-        redisCacheService.set(key, indices, 1, TimeUnit.MINUTES);
-        log.debug("缓存大盘指数数据");
-    }
-
-    /**
-     * 获取缓存的大盘指数
-     */
-    @SuppressWarnings("unchecked")
-    public List<MarketIndexDTO> getCachedMarketIndices() {
-        String key = RedisConfig.CACHE_MARKET_INDEX;
-        return redisCacheService.get(key, List.class);
-    }
-
-    /**
-     * 清除实时数据缓存
-     */
-    public void clearRealtimeDataCache(String symbol) {
-        String key = RedisConfig.CACHE_REALTIME_DATA + ":" + symbol;
+    public void clearKlineDataCache(String symbol, String period) {
+        String key = RedisConfig.CACHE_STOCK_KLINE + ":" + symbol + ":" + period;
         redisCacheService.delete(key);
-        log.debug("清除实时数据缓存: {}", symbol);
+        log.debug("清除K线数据缓存: {}, 周期: {}", symbol, period);
     }
 
     /**
-     * 清除所有实时数据缓存
+     * 清除所有K线数据缓存
+     * 每日收盘后调用
      */
-    public void clearAllRealtimeDataCache() {
-        redisCacheService.deleteByPattern("stock:realtime:*");
-        log.info("清除所有实时数据缓存");
+    public void clearAllKlineDataCache() {
+        redisCacheService.deleteByPattern("stock:kline:*");
+        log.info("清除所有K线数据缓存");
     }
 }

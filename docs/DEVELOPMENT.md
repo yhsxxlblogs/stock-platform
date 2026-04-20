@@ -337,16 +337,17 @@ chore: 构建过程或辅助工具的变动
 
 ### 数据获取优先级
 
+#### 实时数据（盘中价格波动）
+**不使用Redis缓存**，通过WebSocket实时推送
+
 1. **自选股列表** (`UserFavoriteController.getFavorites()`)
    - 第一优先级: 腾讯API实时数据
-   - 第二优先级: Redis缓存 (5分钟过期)
-   - 第三优先级: 数据库缓存
-   - 获取后更新: Redis + 数据库
+   - 第二优先级: 数据库缓存
+   - 获取后更新数据库（收盘后保留最新数据）
 
 2. **热门股票** (`StockController.getHotStocks()`)
    - 第一优先级: 数据库缓存
-   - 第二优先级: Redis缓存
-   - 交易时间由定时任务更新
+   - 交易时间由定时任务每5秒更新
 
 3. **个股详情** (`StockController.getStockDetail()`)
    - 第一优先级: 腾讯API实时数据
@@ -354,20 +355,28 @@ chore: 构建过程或辅助工具的变动
 
 4. **大盘指数** (`StockController.getMarketIndex()`)
    - 第一优先级: 腾讯API实时数据
-   - 第二优先级: Redis缓存 (1分钟过期)
+   - 第二优先级: 数据库缓存
+
+#### 历史数据（K线图）
+**使用Redis缓存**，历史数据高度一致
+
+1. **K线数据** (`StockController.getKlineData()`)
+   - 第一优先级: Redis缓存 (24小时)
+   - 第二优先级: 数据库/第三方API
+   - 每日收盘后清除缓存，次日重新获取
 
 ### Redis缓存策略
 
 | 缓存类型 | Key | 过期时间 | 说明 |
 |---------|-----|---------|------|
-| 实时数据 | `stock:realtime:data:{symbol}` | 5分钟 | 单只股票实时数据 |
-| 大盘指数 | `market:index` | 1分钟 | 大盘指数数据 |
+| K线数据 | `stock:kline:{symbol}:{period}` | 24小时 | K线历史数据，收盘后清除 |
 | 股票列表 | `stock:list` | 30分钟 | 所有股票基础信息 |
 | 股票详情 | `stock:detail:{symbol}` | 60分钟 | 单只股票详细信息 |
-| K线数据 | `stock:kline:{symbol}:{period}` | 24小时 | K线历史数据 |
 | 搜索结果 | `search:{keyword}` | 30分钟 | 搜索关键词结果 |
 | 用户信息 | `user:info:{userId}` | 120分钟 | 用户基本信息 |
 | 自选股 | `user:favorites:{userId}` | 30分钟 | 用户自选股列表 |
+
+**注意**: 实时数据（价格、涨跌幅、成交量等）不使用Redis缓存，通过WebSocket实时推送
 
 ## 性能优化
 

@@ -10,7 +10,6 @@ import com.stock.platform.repository.StockRepository;
 import com.stock.platform.repository.StockRealtimeDataRepository;
 import com.stock.platform.repository.UserFavoriteRepository;
 import com.stock.platform.repository.UserRepository;
-import com.stock.platform.service.StockCacheService;
 import com.stock.platform.service.TencentStockDataService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,9 +41,6 @@ public class UserFavoriteController {
     @Autowired
     private TencentStockDataService tencentStockDataService;
 
-    @Autowired
-    private StockCacheService stockCacheService;
-
     @GetMapping
     public ResponseEntity<ApiResponse<List<StockDTO>>> getFavorites(Authentication authentication) {
         User user = userRepository.findByUsername(authentication.getName())
@@ -64,9 +60,6 @@ public class UserFavoriteController {
                 List<StockDTO> realtimeDataList = tencentStockDataService.getRealtimeDataBatch(
                         favorites.stream().map(f -> f.getStock()).collect(Collectors.toList())
                 );
-
-                // 将API数据缓存到Redis
-                stockCacheService.cacheRealtimeDataBatch(realtimeDataList);
 
                 // 构建结果，保持原有股票信息
                 for (UserFavorite favorite : favorites) {
@@ -107,34 +100,19 @@ public class UserFavoriteController {
                             log.warn("更新股票 {} 数据到数据库失败: {}", stock.getSymbol(), e.getMessage());
                         }
                     } else {
-                        // API获取失败，先尝试从Redis缓存获取
-                        StockDTO cachedData = stockCacheService.getCachedRealtimeData(stock.getSymbol());
-                        if (cachedData != null) {
+                        // API获取失败，使用数据库缓存的数据
+                        realtimeDataRepository.findByStockId(stock.getId()).ifPresent(cached -> {
                             dtoBuilder
-                                    .currentPrice(cachedData.getCurrentPrice())
-                                    .changePrice(cachedData.getChangePrice())
-                                    .changePercent(cachedData.getChangePercent())
-                                    .volume(cachedData.getVolume())
-                                    .amount(cachedData.getAmount())
-                                    .highPrice(cachedData.getHighPrice())
-                                    .lowPrice(cachedData.getLowPrice())
-                                    .openPrice(cachedData.getOpenPrice())
-                                    .preClose(cachedData.getPreClose());
-                        } else {
-                            // 最后使用数据库缓存的数据
-                            realtimeDataRepository.findByStockId(stock.getId()).ifPresent(cached -> {
-                                dtoBuilder
-                                        .currentPrice(cached.getCurrentPrice())
-                                        .changePrice(cached.getChangePrice())
-                                        .changePercent(cached.getChangePercent())
-                                        .volume(cached.getVolume())
-                                        .amount(cached.getAmount())
-                                        .highPrice(cached.getHighPrice())
-                                        .lowPrice(cached.getLowPrice())
-                                        .openPrice(cached.getOpenPrice())
-                                        .preClose(cached.getPreClose());
-                            });
-                        }
+                                    .currentPrice(cached.getCurrentPrice())
+                                    .changePrice(cached.getChangePrice())
+                                    .changePercent(cached.getChangePercent())
+                                    .volume(cached.getVolume())
+                                    .amount(cached.getAmount())
+                                    .highPrice(cached.getHighPrice())
+                                    .lowPrice(cached.getLowPrice())
+                                    .openPrice(cached.getOpenPrice())
+                                    .preClose(cached.getPreClose());
+                        });
                     }
 
                     result.add(dtoBuilder.build());

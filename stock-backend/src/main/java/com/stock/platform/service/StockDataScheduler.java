@@ -38,6 +38,9 @@ public class StockDataScheduler {
     @Autowired
     private StockSyncService stockSyncService;
 
+    @Autowired
+    private StockCacheService stockCacheService;
+
     // 线程池用于并行更新实时数据 - 2核服务器使用2线程
     private final ExecutorService executorService = Executors.newFixedThreadPool(2);
 
@@ -210,6 +213,10 @@ public class StockDataScheduler {
     public void dailyDataArchive() {
         log.info("定时任务：Start每日数据归档...");
         try {
+            // 清除K线数据缓存，次日开盘前重新获取最新数据
+            stockCacheService.clearAllKlineDataCache();
+            log.info("已清除K线数据缓存，次日将获取最新数据");
+
             // 这里可以添加数据归档逻辑
             // 例如：将实时数据保存到历史数据表
             log.info("每日数据归档Completed");
