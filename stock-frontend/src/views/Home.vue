@@ -880,9 +880,13 @@ onUnmounted(() => {
   margin-bottom: 30px;
 }
 
+.market-overview :deep(.el-card) {
+  overflow: hidden;
+}
+
 .index-card {
   text-align: center;
-  transition: transform 0.3s;
+  transition: all 0.3s ease;
   overflow: hidden;
 }
 

@@ -130,14 +130,14 @@
               <span class="trade-volume">数量</span>
             </div>
             <!-- 卖五到卖一 -->
-            <div v-for="level in askLevels" :key="'ask'+level.level" class="trade-item ask">
+            <div v-for="(level, index) in askLevels" :key="'ask'+level.level" class="trade-item ask" :class="{ 'trade-flash': flashingAskLevels.has(index) }">
               <span class="trade-label">卖{{ level.level }}</span>
               <span class="trade-price" :class="getPriceClass(level.price)">{{ level.price?.toFixed(2) || '-' }}</span>
               <span class="trade-volume">{{ level.volumeDisplay || formatTradeVolume(level.volume) }}</span>
             </div>
             <el-divider />
             <!-- 买一到买五 -->
-            <div v-for="level in bidLevels" :key="'bid'+level.level" class="trade-item bid">
+            <div v-for="(level, index) in bidLevels" :key="'bid'+level.level" class="trade-item bid" :class="{ 'trade-flash': flashingBidLevels.has(index) }">
               <span class="trade-label">买{{ level.level }}</span>
               <span class="trade-price" :class="getPriceClass(level.price)">{{ level.price?.toFixed(2) || '-' }}</span>
               <span class="trade-volume">{{ level.volumeDisplay || formatTradeVolume(level.volume) }}</span>
@@ -578,6 +578,10 @@ watch(chartType, () => {
   fetchChartData()
 })
 
+// 买卖盘口闪烁动画状态
+const flashingBidLevels = ref<Set<number>>(new Set())
+const flashingAskLevels = ref<Set<number>>(new Set())
+
 // WebSocket 实时数据更新
 const setupWebSocket = () => {
   // 连接 WebSocket
@@ -616,6 +620,51 @@ const setupWebSocket = () => {
 
         console.log('收到实时数据更新:', newPrice)
       }
+    }
+  })
+
+  // 监听股票详情更新（包含买卖盘口）
+  wsService.onMessage('stockDetail', (data) => {
+    if (data.symbol === symbol && data.data && stockDetail.value) {
+      const newData = data.data
+
+      // 更新买卖五档
+      if (newData.bidLevels) {
+        // 检查哪些档位变化了
+        newData.bidLevels.forEach((newLevel: any, index: number) => {
+          const oldLevel = stockDetail.value?.bidLevels?.[index]
+          if (oldLevel && (oldLevel.price !== newLevel.price || oldLevel.volume !== newLevel.volume)) {
+            flashingBidLevels.value.add(index)
+            setTimeout(() => {
+              flashingBidLevels.value.delete(index)
+            }, 500)
+          }
+        })
+        stockDetail.value.bidLevels = newData.bidLevels
+      }
+
+      if (newData.askLevels) {
+        // 检查哪些档位变化了
+        newData.askLevels.forEach((newLevel: any, index: number) => {
+          const oldLevel = stockDetail.value?.askLevels?.[index]
+          if (oldLevel && (oldLevel.price !== newLevel.price || oldLevel.volume !== newLevel.volume)) {
+            flashingAskLevels.value.add(index)
+            setTimeout(() => {
+              flashingAskLevels.value.delete(index)
+            }, 500)
+          }
+        })
+        stockDetail.value.askLevels = newData.askLevels
+      }
+
+      // 更新其他实时数据
+      if (newData.currentPrice) stockDetail.value.currentPrice = newData.currentPrice
+      if (newData.changePrice) stockDetail.value.changePrice = newData.changePrice
+      if (newData.changePercent) stockDetail.value.changePercent = newData.changePercent
+      if (newData.volume) stockDetail.value.volume = newData.volume
+      if (newData.amount) stockDetail.value.amount = newData.amount
+
+      console.log('收到股票详情更新，买卖盘口已更新')
     }
   })
 
@@ -867,5 +916,23 @@ onUnmounted(() => {
 .trade-item.bid .trade-price {
   color: #ff0000;
   font-weight: 600;
+}
+
+/* 买卖盘口闪烁动画 */
+.trade-flash {
+  animation: trade-flash 0.5s ease-out;
+  background-color: rgba(255, 255, 0, 0.2);
+}
+
+@keyframes trade-flash {
+  0% {
+    background-color: rgba(255, 255, 0, 0.4);
+  }
+  50% {
+    background-color: rgba(255, 255, 0, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 </style>

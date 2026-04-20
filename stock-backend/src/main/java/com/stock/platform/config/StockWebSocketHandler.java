@@ -64,6 +64,8 @@ public class StockWebSocketHandler extends TextWebSocketHandler implements Initi
                     // 每2秒推送一次
                     Thread.sleep(2000);
                     pushRealtimeData();
+                    // 同时推送股票详情（包含买卖盘口）
+                    pushStockDetailData();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
@@ -75,6 +77,48 @@ public class StockWebSocketHandler extends TextWebSocketHandler implements Initi
         pushThread.setDaemon(true);
         pushThread.setName("StockPushThread");
         pushThread.start();
+    }
+
+    /**
+     * 推送股票详情数据（包含买卖盘口）
+     */
+    private void pushStockDetailData() {
+        if (sessions.isEmpty()) {
+            return;
+        }
+
+        for (WebSocketSession session : sessions.values()) {
+            if (session.isOpen()) {
+                pushClientStockDetail(session);
+            }
+        }
+    }
+
+    /**
+     * 推送客户端订阅的股票详情
+     */
+    private void pushClientStockDetail(WebSocketSession session) {
+        try {
+            Set<String> symbols = pushService.getClientSubscriptions(session.getId());
+            if (symbols == null || symbols.isEmpty()) {
+                return;
+            }
+
+            // 为每个订阅的股票推送详情
+            for (String symbol : symbols) {
+                StockDetailDTO detail = stockDataService.getStockDetail(symbol);
+                if (detail != null) {
+                    String message = createMessage("stockDetail", Map.of(
+                            "symbol", symbol,
+                            "data", detail,
+                            "timestamp", System.currentTimeMillis()
+                    ));
+                    sendMessage(session, message);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Push stock detail to client {} Failed: {}", session.getId(), e.getMessage());
+        }
     }
 
     /**
