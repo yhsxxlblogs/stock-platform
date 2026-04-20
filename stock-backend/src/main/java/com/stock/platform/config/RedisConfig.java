@@ -35,6 +35,7 @@ public class RedisConfig extends CachingConfigurerSupport {
      * 缓存名称常量
      */
     public static final String CACHE_STOCK_REALTIME = "stock:realtime";
+    public static final String CACHE_REALTIME_DATA = "stock:realtime:data";
     public static final String CACHE_STOCK_DETAIL = "stock:detail";
     public static final String CACHE_STOCK_LIST = "stock:list";
     public static final String CACHE_MARKET_INDEX = "market:index";
