@@ -37,4 +37,8 @@ public class StockDTO {
     // 格式化展示字段
     private String volumeDisplay;  // 成交量展示：如 "299.18万手"
     private String amountDisplay;  // 成交额展示：如 "105.98亿"
+
+    // 数据来源标记
+    @Builder.Default
+    private Boolean fromCache = false;  // 是否来自缓存数据
 }

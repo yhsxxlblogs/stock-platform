@@ -49,23 +49,88 @@ public class TencentStockDataService {
     private static final String TENCENT_KLINE_API = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get";
     private static final String TENCENT_MINUTE_API = "https://web.ifzq.gtimg.cn/appstock/app/minute/query";
 
+    // 缓存最近一次的实时数据，用于API失败时降级
+    private final Map<String, StockDTO> realtimeDataCache = new ConcurrentHashMap<>();
+    private volatile long lastSuccessfulFetchTime = 0;
+    private static final long CACHE_VALIDITY_MS = 60000; // 缓存有效期60秒
+
     /**
      * 批量获取股票实时数据（用于前端展示，不保存到数据库）
+     * 支持优雅降级：API失败时返回缓存数据
      */
     public List<StockDTO> getRealtimeDataBatch(List<Stock> stocks) {
         List<StockDTO> result = new ArrayList<>();
+        boolean apiSuccess = false;
+
         try {
-            // 分批处理，每批50只
-            int batchSize = 50;
+            // 分批处理，每批30只（减少每批数量，降低API压力）
+            int batchSize = 30;
             for (int i = 0; i < stocks.size(); i += batchSize) {
                 List<Stock> batch = stocks.subList(i, Math.min(i + batchSize, stocks.size()));
-                List<StockDTO> batchResult = fetchBatchRealtimeData(batch);
-                result.addAll(batchResult);
-                Thread.sleep(50); // 避免请求过快
+                List<StockDTO> batchResult = fetchBatchRealtimeDataWithRetry(batch, 2);
+                if (!batchResult.isEmpty()) {
+                    result.addAll(batchResult);
+                    apiSuccess = true;
+                }
+                Thread.sleep(100); // 增加延迟，避免请求过快
             }
+
+            // 如果API调用成功，更新缓存
+            if (apiSuccess) {
+                lastSuccessfulFetchTime = System.currentTimeMillis();
+                for (StockDTO dto : result) {
+                    realtimeDataCache.put(dto.getSymbol(), dto);
+                }
+                log.info("实时数据获取成功，共 {} 条，已更新缓存", result.size());
+            }
+
         } catch (Exception e) {
-            log.error("批量Get实时数据Failed: {}", e.getMessage());
+            log.error("批量获取实时数据异常: {}", e.getMessage());
         }
+
+        // 如果API调用失败或返回数据为空，使用缓存数据
+        if (result.isEmpty() && !realtimeDataCache.isEmpty()) {
+            log.warn("API获取失败，使用缓存数据，缓存数量: {}", realtimeDataCache.size());
+            for (Stock stock : stocks) {
+                StockDTO cached = realtimeDataCache.get(stock.getSymbol());
+                if (cached != null) {
+                    // 标记为缓存数据
+                    cached.setFromCache(true);
+                    result.add(cached);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 带重试机制的批量获取
+     */
+    private List<StockDTO> fetchBatchRealtimeDataWithRetry(List<Stock> stocks, int maxRetry) {
+        List<StockDTO> result = new ArrayList<>();
+        int attempt = 0;
+
+        while (attempt < maxRetry && result.isEmpty()) {
+            try {
+                result = fetchBatchRealtimeData(stocks);
+                if (!result.isEmpty()) {
+                    break;
+                }
+            } catch (Exception e) {
+                log.warn("第 {} 次尝试获取数据失败: {}", attempt + 1, e.getMessage());
+            }
+            attempt++;
+            if (attempt < maxRetry) {
+                try {
+                    Thread.sleep(500); // 重试前等待500ms
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
         return result;
     }
     

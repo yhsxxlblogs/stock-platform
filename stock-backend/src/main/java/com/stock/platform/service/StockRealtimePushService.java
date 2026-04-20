@@ -150,6 +150,7 @@ public class StockRealtimePushService {
             // 更新缓存
             long currentTime = System.currentTimeMillis();
             for (StockDTO stock : stockList) {
+                stock.setFromCache(false);  // 标记为实时数据
                 stockCache.put(stock.getSymbol(), stock);
                 cacheTimestamp.put(stock.getSymbol(), currentTime);
             }
@@ -159,6 +160,10 @@ public class StockRealtimePushService {
 
         } catch (Exception e) {
             log.error("Get实时数据Failed: {}", e.getMessage());
+            // API调用失败时，缓存数据标记为fromCache=true
+            for (StockDTO stock : stockCache.values()) {
+                stock.setFromCache(true);
+            }
         }
     }
 

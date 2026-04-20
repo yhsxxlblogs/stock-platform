@@ -8,6 +8,7 @@ import com.stock.platform.service.EastMoneyStockService;
 import com.stock.platform.service.StockDataService;
 import com.stock.platform.service.StockSyncService;
 import com.stock.platform.service.TencentStockDataService;
+import com.stock.platform.util.MarketTimeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -413,6 +414,22 @@ public class StockController {
         stats.put("lastUpdateTime", new java.util.Date());
 
         return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    /**
+     * 获取市场状态（开市/闭市）
+     */
+    @GetMapping("/public/market-status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMarketStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("isTradingTime", MarketTimeUtil.isTradingTime());
+        status.put("isTradingDay", MarketTimeUtil.isTradingDay());
+        status.put("status", MarketTimeUtil.getMarketStatus());
+        status.put("statusCode", MarketTimeUtil.getMarketStatusCode());
+        status.put("nextOpenTime", MarketTimeUtil.getNextOpenTime());
+        status.put("currentTime", java.time.LocalDateTime.now());
+
+        return ResponseEntity.ok(ApiResponse.success(status));
     }
 
     // ==================== 新版股票同步接口 ====================

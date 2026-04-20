@@ -211,9 +211,14 @@ public class StockWebSocketHandler extends TextWebSocketHandler implements Initi
         try {
             Map<String, StockDTO> stocks = pushService.getClientStockData(session.getId());
             if (!stocks.isEmpty()) {
+                // 检查是否所有数据都来自缓存
+                boolean allFromCache = stocks.values().stream()
+                        .allMatch(stock -> stock.getFromCache() != null && stock.getFromCache());
+
                 String message = createMessage("marketData", Map.of(
                         "stocks", stocks.values(),
-                        "timestamp", System.currentTimeMillis()
+                        "timestamp", System.currentTimeMillis(),
+                        "fromCache", allFromCache
                 ));
                 sendMessage(session, message);
             }

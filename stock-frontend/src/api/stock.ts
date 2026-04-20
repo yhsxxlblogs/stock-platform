@@ -128,3 +128,18 @@ export interface StockSuggestion {
   exchange: string
   fullName: string
 }
+
+// 市场状态接口
+export interface MarketStatus {
+  isTradingTime: boolean
+  isTradingDay: boolean
+  status: string
+  statusCode: number
+  nextOpenTime: string
+  currentTime: string
+}
+
+// 获取市场状态
+export const getMarketStatus = () => {
+  return request.get('/stocks/public/market-status')
+}
