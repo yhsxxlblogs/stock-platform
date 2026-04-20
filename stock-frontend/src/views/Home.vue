@@ -1,35 +1,20 @@
 <template>
   <div class="home">
-    <!-- 市场状态栏 -->
-    <div class="market-status-bar" :class="marketStatusClass">
-      <div class="market-status-content">
-        <div class="market-status-left">
-          <el-tag :type="marketStatusTagType" effect="dark" size="large" class="market-status-tag">
-            <el-icon v-if="marketStatus?.isTradingTime" class="is-loading"><Loading /></el-icon>
-            <el-icon v-else><Timer /></el-icon>
-            {{ marketStatus?.status || '加载中...' }}
-          </el-tag>
-          <span v-if="marketStatus?.isTradingTime" class="trading-time-hint">
-            交易中 {{ currentTime }}
-          </span>
-          <span v-else-if="marketStatus?.nextOpenTime" class="next-open-hint">
-            下次开盘: {{ formatNextOpenTime(marketStatus.nextOpenTime) }}
-          </span>
-        </div>
-        <div class="market-status-right">
-          <span class="data-source-hint" v-if="hasCacheData">
-            <el-icon><Warning /></el-icon>
-            数据有延迟
-          </span>
-          <el-tag v-if="marketStatus?.isTradingTime" type="success" effect="plain" size="small">
-            实时推送中
-          </el-tag>
-        </div>
-      </div>
-    </div>
-
     <!-- Hero Section -->
     <div class="hero-section">
+      <!-- 市场状态指示器 - 整合到HeroSection右上角 -->
+      <div class="market-status-float" :class="marketStatusClass">
+        <div class="market-status-indicator">
+          <span class="status-dot" :class="{ 'pulse-dot': marketStatus?.isTradingTime }"></span>
+          <span class="status-text">{{ marketStatus?.status || '加载中...' }}</span>
+          <span v-if="marketStatus?.isTradingTime" class="status-time">{{ currentTime }}</span>
+        </div>
+        <div v-if="hasCacheData" class="cache-warning">
+          <el-icon><Warning /></el-icon>
+          <span>数据有延迟</span>
+        </div>
+      </div>
+
       <div class="hero-content">
         <div class="hero-text">
           <h1>MarketPulse</h1>
@@ -134,6 +119,7 @@
       <el-empty description="未找到相关股票" />
     </div>
 
+    <!-- 大盘指数 -->
     <div class="market-overview">
       <el-row :gutter="20">
         <el-col :span="6" v-for="item in marketIndices" :key="item.name">
@@ -151,7 +137,13 @@
 
     <!-- 热门股票 -->
     <div class="hot-stocks-section">
-      <h3>热门股票</h3>
+      <div class="section-header">
+        <h3>热门股票</h3>
+        <div class="realtime-indicator" v-if="marketStatus?.isTradingTime">
+          <span class="live-dot"></span>
+          <span>实时推送中</span>
+        </div>
+      </div>
       <el-table :data="hotStocks" style="width: 100%" v-loading="loading" :row-class-name="getRowFlashClass">
         <el-table-column prop="symbol" label="代码" width="100">
           <template #default="{ row }">
@@ -161,7 +153,7 @@
         <el-table-column prop="name" label="名称" width="150" />
         <el-table-column prop="currentPrice" label="最新价">
           <template #default="{ row }">
-            <span :class="getPriceClass(row.changePercent)">
+            <span :class="[getPriceClass(row.changePercent), { 'price-flash': flashingStocks.has(row.symbol) }]">
               {{ row.currentPrice?.toFixed(2) || '-' }}
             </span>
           </template>
@@ -260,7 +252,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, Lock, User, Loading, Timer, Warning } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
@@ -295,6 +287,7 @@ const hasCacheData = ref(false)
 let marketStatusTimer: number | null = null
 let timeTimer: number | null = null
 let stockCountTimer: number | null = null
+let indexTimer: number | null = null
 
 // 热门搜索标签
 const hotSearchTags = ['贵州茅台', '腾讯控股', '宁德时代', '比亚迪', '阿里巴巴']
@@ -307,13 +300,6 @@ const marketStatusClass = computed(() => {
   return 'status-closed'
 })
 
-const marketStatusTagType = computed(() => {
-  if (!marketStatus.value) return 'info'
-  if (marketStatus.value.isTradingTime) return 'success'
-  if (marketStatus.value.status === '午休') return 'warning'
-  return 'info'
-})
-
 const fetchStocks = async () => {
   loading.value = true
   try {
@@ -324,8 +310,11 @@ const fetchStocks = async () => {
       .sort((a: Stock, b: Stock) => Math.abs(b.changePercent || 0) - Math.abs(a.changePercent || 0))
     hotStocks.value = sortedStocks.slice(0, 10)
     
-    // 获取真实大盘指数
+    // 获取大盘指数
     await fetchMarketIndices()
+    
+    // 订阅热门股票到WebSocket
+    subscribeHotStocks()
   } catch (error) {
     console.error('获取股票列表失败:', error)
   } finally {
@@ -333,11 +322,18 @@ const fetchStocks = async () => {
   }
 }
 
+// 订阅热门股票到WebSocket
+const subscribeHotStocks = () => {
+  if (hotStocks.value.length > 0) {
+    const symbols = hotStocks.value.map(s => s.symbol)
+    wsService.subscribeStocks(symbols)
+    console.log('WebSocket订阅热门股票:', symbols)
+  }
+}
+
 const fetchMarketIndices = async () => {
   try {
     const res: any = await getMarketIndex()
-    console.log('大盘指数API返回:', res)
-    // request拦截器已经返回了response.data，所以res就是ApiResponse对象
     const newIndices = res.data || []
     
     // 检查价格变化并触发闪烁动画
@@ -352,20 +348,25 @@ const fetchMarketIndices = async () => {
     }
     
     marketIndices.value = newIndices
-    console.log('设置后的marketIndices:', marketIndices.value)
   } catch (error) {
     console.error('获取大盘指数失败:', error)
   }
 }
 
 const fetchFavorites = async () => {
+  if (!isLoggedIn.value) return
+  
   favoritesLoading.value = true
   try {
     const res: any = await getFavorites()
-    console.log('自选股API返回:', res)
     if (res.code === 200 && res.data) {
       favoriteStocks.value = res.data
-      console.log(`获取到 ${res.data.length} 只自选股`)
+      // 订阅自选股到WebSocket
+      const symbols = favoriteStocks.value.map(s => s.symbol)
+      if (symbols.length > 0) {
+        wsService.subscribeStocks(symbols)
+        console.log('WebSocket订阅自选股:', symbols)
+      }
     } else {
       favoriteStocks.value = []
     }
@@ -389,16 +390,11 @@ const handleSearch = async () => {
   hasSearched.value = true
 
   try {
-    console.log('搜索股票:', keyword)
     const res: any = await searchStocks(keyword)
-    console.log('搜索结果:', res)
-
     if (res.code === 200 && res.data) {
       searchResults.value = res.data
-      console.log(`找到 ${res.data.length} 只股票`)
     } else {
       searchResults.value = []
-      console.log('未找到股票')
     }
   } catch (error) {
     console.error('搜索股票失败:', error)
@@ -503,19 +499,22 @@ const setupWebSocket = () => {
     if (data.stocks && data.stocks.length > 0) {
       // 更新热门股票列表（最小化更新，只更新价格变化的）
       updateHotStocksMinimally(data.stocks)
+      // 更新自选股列表
+      updateFavoritesMinimally(data.stocks)
       console.log('收到实时行情数据更新:', data.stocks.length, '只股票')
     }
     // 检查是否有缓存数据标记
-    if (data.fromCache) {
-      hasCacheData.value = true
-    } else {
-      hasCacheData.value = false
-    }
+    hasCacheData.value = data.fromCache === true
   })
 
   // 监听连接状态
   wsService.onMessage('connected', (data) => {
     console.log('WebSocket 连接成功:', data)
+    // 连接成功后重新订阅
+    subscribeHotStocks()
+    if (isLoggedIn.value) {
+      fetchFavorites()
+    }
   })
 }
 
@@ -538,6 +537,26 @@ const updateHotStocksMinimally = (newStocks: Stock[]) => {
       if (oldPrice !== newStock.currentPrice) {
         const direction = (newStock.currentPrice || 0) > (oldPrice || 0) ? 'up' : 'down'
         triggerPriceFlash(hotStocks.value[index].symbol, direction)
+      }
+    }
+  })
+}
+
+// 最小化更新自选股列表
+const updateFavoritesMinimally = (newStocks: Stock[]) => {
+  newStocks.forEach((newStock: Stock) => {
+    const index = favoriteStocks.value.findIndex(s => s.symbol === newStock.symbol)
+    if (index !== -1) {
+      const oldPrice = favoriteStocks.value[index].currentPrice
+      favoriteStocks.value[index].currentPrice = newStock.currentPrice
+      favoriteStocks.value[index].changePrice = newStock.changePrice
+      favoriteStocks.value[index].changePercent = newStock.changePercent
+      favoriteStocks.value[index].volume = newStock.volume
+      favoriteStocks.value[index].amount = newStock.amount
+
+      if (oldPrice !== newStock.currentPrice) {
+        const direction = (newStock.currentPrice || 0) > (oldPrice || 0) ? 'up' : 'down'
+        triggerPriceFlash(newStock.symbol, direction)
       }
     }
   })
@@ -626,9 +645,9 @@ const triggerStockCountFlash = () => {
 
 onMounted(() => {
   fetchStocks()
-  fetchFavorites()  // 获取自选股
-  fetchMarketStatus()  // 获取市场状态
-  setupWebSocket()  // 启动 WebSocket 连接
+  fetchFavorites()
+  fetchMarketStatus()
+  setupWebSocket()
 
   // 定时更新市场状态（每30秒）
   marketStatusTimer = window.setInterval(() => {
@@ -645,21 +664,21 @@ onMounted(() => {
   stockCountTimer = window.setInterval(() => {
     triggerStockCountFlash()
   }, 5000)
+  
+  // 定时更新大盘指数（每5秒）
+  indexTimer = window.setInterval(() => {
+    fetchMarketIndices()
+  }, 5000)
 })
 
 onUnmounted(() => {
-  wsService.disconnect()  // 断开 WebSocket 连接
+  wsService.disconnect()
 
   // 清理定时器
-  if (marketStatusTimer) {
-    clearInterval(marketStatusTimer)
-  }
-  if (timeTimer) {
-    clearInterval(timeTimer)
-  }
-  if (stockCountTimer) {
-    clearInterval(stockCountTimer)
-  }
+  if (marketStatusTimer) clearInterval(marketStatusTimer)
+  if (timeTimer) clearInterval(timeTimer)
+  if (stockCountTimer) clearInterval(stockCountTimer)
+  if (indexTimer) clearInterval(indexTimer)
 })
 </script>
 
@@ -667,6 +686,79 @@ onUnmounted(() => {
 .home {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+/* ========== Hero Section 市场状态浮动指示器 ========== */
+.market-status-float {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  z-index: 10;
+}
+
+.status-trading {
+  background: rgba(103, 194, 58, 0.9);
+}
+
+.status-lunch {
+  background: rgba(230, 162, 60, 0.9);
+}
+
+.status-closed {
+  background: rgba(144, 147, 153, 0.9);
+}
+
+.market-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.3);
+  }
+}
+
+.status-time {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.cache-warning {
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.9;
+  animation: blink 2s ease-in-out infinite;
 }
 
 .hero-section {
@@ -825,14 +917,6 @@ onUnmounted(() => {
   color: #999;
 }
 
-.market-widgets {
-  margin-bottom: 30px;
-}
-
-.market-widgets .el-col {
-  margin-bottom: 20px;
-}
-
 .hot-stocks-section {
   background: #fff;
   padding: 20px;
@@ -840,10 +924,33 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-.hot-stocks-section h3 {
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
+}
+
+.section-header h3 {
+  margin: 0;
   font-size: 18px;
   color: #333;
+}
+
+.realtime-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #67c23a;
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  background: #67c23a;
+  border-radius: 50%;
+  animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
 .search-results {
@@ -904,20 +1011,6 @@ onUnmounted(() => {
   border-radius: 3px;
 }
 
-/* 分区头部 */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #333;
-}
-
 .login-tip {
   display: flex;
   align-items: center;
@@ -950,80 +1043,6 @@ onUnmounted(() => {
   font-size: 14px;
   color: #909399;
   margin-top: 16px;
-}
-
-/* ========== 市场状态栏样式 ========== */
-.market-status-bar {
-  margin-bottom: 20px;
-  padding: 12px 20px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.market-status-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.market-status-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.market-status-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* 交易中状态 - 绿色渐变 */
-.status-trading {
-  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-  box-shadow: 0 2px 12px rgba(103, 194, 58, 0.3);
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* 午休状态 - 橙色渐变 */
-.status-lunch {
-  background: linear-gradient(135deg, #e6a23c 0%, #ebb563 100%);
-  box-shadow: 0 2px 12px rgba(230, 162, 60, 0.3);
-}
-
-/* 闭市状态 - 灰色渐变 */
-.status-closed {
-  background: linear-gradient(135deg, #909399 0%, #a6a9ad 100%);
-  box-shadow: 0 2px 8px rgba(144, 147, 153, 0.2);
-}
-
-.market-status-tag {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.trading-time-hint {
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  font-family: 'Courier New', monospace;
-}
-
-.next-open-hint {
-  color: #fff;
-  font-size: 13px;
-  opacity: 0.9;
-}
-
-.data-source-hint {
-  color: #fff;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0.9;
-  animation: blink 2s ease-in-out infinite;
 }
 
 /* ========== 数据跳动动画 ========== */
@@ -1067,41 +1086,25 @@ onUnmounted(() => {
   }
 }
 
-/* 脉冲发光效果 - 市场状态栏 */
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 2px 12px rgba(103, 194, 58, 0.3);
-  }
-  50% {
-    box-shadow: 0 4px 20px rgba(103, 194, 58, 0.5);
-  }
+/* 价格闪烁效果 */
+.price-flash {
+  animation: price-flash 0.5s ease-out;
 }
 
-/* 旋转动画 - 加载中图标 */
-.is-loading {
-  animation: rotating 1s linear infinite;
-}
-
-@keyframes rotating {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 闪烁动画 - 数据延迟提示 */
-@keyframes blink {
-  0%, 100% {
+@keyframes price-flash {
+  0% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
   }
 }
 
-/* 价格变化时的背景闪烁 - 用于表格行 */
+/* 表格行背景闪烁 */
 .price-up-flash {
   animation: price-up-bg 0.5s ease-out;
 }
@@ -1173,21 +1176,47 @@ onUnmounted(() => {
   }
 }
 
+/* 闪烁动画 */
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* ========== 响应式适配 ========== */
 @media (max-width: 768px) {
-  .market-status-content {
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
+  .market-status-float {
+    top: 10px;
+    right: 10px;
+    padding: 6px 12px;
   }
 
-  .market-status-left {
-    flex-wrap: wrap;
-  }
-
-  .trading-time-hint,
-  .next-open-hint {
+  .market-status-indicator {
     font-size: 12px;
+  }
+
+  .status-time {
+    display: none;
+  }
+
+  .hero-content {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .hero-search {
+    width: 100%;
+  }
+
+  .hero-text h1 {
+    font-size: 36px;
+  }
+
+  .hero-stats {
+    gap: 20px;
   }
 }
 </style>
