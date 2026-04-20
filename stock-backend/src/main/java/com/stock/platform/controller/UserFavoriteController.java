@@ -8,16 +8,20 @@ import com.stock.platform.repository.StockRepository;
 import com.stock.platform.repository.StockRealtimeDataRepository;
 import com.stock.platform.repository.UserFavoriteRepository;
 import com.stock.platform.repository.UserRepository;
+import com.stock.platform.service.TencentStockDataService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/favorites")
+@Slf4j
 public class UserFavoriteController {
 
     @Autowired
@@ -32,6 +36,9 @@ public class UserFavoriteController {
     @Autowired
     private StockRealtimeDataRepository realtimeDataRepository;
 
+    @Autowired
+    private TencentStockDataService tencentStockDataService;
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<StockDTO>>> getFavorites(Authentication authentication) {
         User user = userRepository.findByUsername(authentication.getName())
@@ -39,10 +46,29 @@ public class UserFavoriteController {
 
         List<UserFavorite> favorites = favoriteRepository.findByUserIdWithStock(user.getId());
 
-        List<StockDTO> result = favorites.stream()
-                .map(f -> {
-                    var stock = f.getStock();
-                    var dto = StockDTO.builder()
+        // 获取所有自选股的代码
+        List<String> symbols = favorites.stream()
+                .map(f -> f.getStock().getSymbol())
+                .collect(Collectors.toList());
+
+        // 直接从API获取最新实时数据
+        List<StockDTO> result = new ArrayList<>();
+        if (!symbols.isEmpty()) {
+            try {
+                List<StockDTO> realtimeDataList = tencentStockDataService.getRealtimeDataBatch(
+                        favorites.stream().map(f -> f.getStock()).collect(Collectors.toList())
+                );
+
+                // 构建结果，保持原有股票信息
+                for (UserFavorite favorite : favorites) {
+                    var stock = favorite.getStock();
+                    // 从API数据中找到对应的实时数据
+                    StockDTO realtimeData = realtimeDataList.stream()
+                            .filter(dto -> dto.getSymbol().equals(stock.getSymbol()))
+                            .findFirst()
+                            .orElse(null);
+
+                    var dtoBuilder = StockDTO.builder()
                             .id(stock.getId())
                             .symbol(stock.getSymbol())
                             .name(stock.getName())
@@ -50,27 +76,81 @@ public class UserFavoriteController {
                             .industry(stock.getIndustry())
                             .marketCap(stock.getMarketCap())
                             .status(stock.getStatus())
-                            .createdAt(stock.getCreatedAt())
-                            .build();
-                    
-                    // 添加实时数据
-                    realtimeDataRepository.findByStockId(stock.getId()).ifPresent(realtime -> {
-                        dto.setCurrentPrice(realtime.getCurrentPrice());
-                        dto.setChangePrice(realtime.getChangePrice());
-                        dto.setChangePercent(realtime.getChangePercent());
-                        dto.setVolume(realtime.getVolume());
-                        dto.setAmount(realtime.getAmount());
-                        dto.setHighPrice(realtime.getHighPrice());
-                        dto.setLowPrice(realtime.getLowPrice());
-                        dto.setOpenPrice(realtime.getOpenPrice());
-                        dto.setPreClose(realtime.getPreClose());
-                    });
-                    
-                    return dto;
-                })
-                .collect(Collectors.toList());
+                            .createdAt(stock.getCreatedAt());
+
+                    if (realtimeData != null) {
+                        // 使用API获取的最新数据
+                        dtoBuilder
+                                .currentPrice(realtimeData.getCurrentPrice())
+                                .changePrice(realtimeData.getChangePrice())
+                                .changePercent(realtimeData.getChangePercent())
+                                .volume(realtimeData.getVolume())
+                                .amount(realtimeData.getAmount())
+                                .highPrice(realtimeData.getHighPrice())
+                                .lowPrice(realtimeData.getLowPrice())
+                                .openPrice(realtimeData.getOpenPrice())
+                                .preClose(realtimeData.getPreClose());
+                    } else {
+                        // API获取失败，使用数据库缓存的数据
+                        realtimeDataRepository.findByStockId(stock.getId()).ifPresent(cached -> {
+                            dtoBuilder
+                                    .currentPrice(cached.getCurrentPrice())
+                                    .changePrice(cached.getChangePrice())
+                                    .changePercent(cached.getChangePercent())
+                                    .volume(cached.getVolume())
+                                    .amount(cached.getAmount())
+                                    .highPrice(cached.getHighPrice())
+                                    .lowPrice(cached.getLowPrice())
+                                    .openPrice(cached.getOpenPrice())
+                                    .preClose(cached.getPreClose());
+                        });
+                    }
+
+                    result.add(dtoBuilder.build());
+                }
+            } catch (Exception e) {
+                log.error("获取自选股实时数据失败: {}", e.getMessage());
+                // API调用失败，回退到数据库查询
+                result = getFavoritesFromDatabase(favorites);
+            }
+        }
 
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
+     * 从数据库获取自选股数据（备用方案）
+     */
+    private List<StockDTO> getFavoritesFromDatabase(List<UserFavorite> favorites) {
+        return favorites.stream()
+                .map(f -> {
+                    var stock = f.getStock();
+                    var dtoBuilder = StockDTO.builder()
+                            .id(stock.getId())
+                            .symbol(stock.getSymbol())
+                            .name(stock.getName())
+                            .exchange(stock.getExchange())
+                            .industry(stock.getIndustry())
+                            .marketCap(stock.getMarketCap())
+                            .status(stock.getStatus())
+                            .createdAt(stock.getCreatedAt());
+
+                    realtimeDataRepository.findByStockId(stock.getId()).ifPresent(realtime -> {
+                        dtoBuilder
+                                .currentPrice(realtime.getCurrentPrice())
+                                .changePrice(realtime.getChangePrice())
+                                .changePercent(realtime.getChangePercent())
+                                .volume(realtime.getVolume())
+                                .amount(realtime.getAmount())
+                                .highPrice(realtime.getHighPrice())
+                                .lowPrice(realtime.getLowPrice())
+                                .openPrice(realtime.getOpenPrice())
+                                .preClose(realtime.getPreClose());
+                    });
+
+                    return dtoBuilder.build();
+                })
+                .collect(Collectors.toList());
     }
 
     @PostMapping("/{stockId}")
