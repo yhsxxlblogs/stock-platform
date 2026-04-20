@@ -9,7 +9,7 @@
         </div>
       </div>
       <div class="stock-price">
-        <div class="current-price" :class="priceClass">
+        <div class="current-price" :class="[priceClass, { 'price-flash-up': isPriceFlashing && priceFlashDirection === 'up', 'price-flash-down': isPriceFlashing && priceFlashDirection === 'down' }]">
           {{ stockDetail?.currentPrice?.toFixed(2) || '-' }}
         </div>
         <div class="price-change" :class="priceClass">
@@ -170,6 +170,10 @@ const chartType = ref('kline')
 const klinePeriod = ref('day')
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
+
+// 价格跳动动画状态
+const isPriceFlashing = ref(false)
+const priceFlashDirection = ref<'up' | 'down'>('up')
 
 const bidLevels = computed<TradeLevel[]>(() => {
   return stockDetail.value?.bidLevels || []
@@ -579,15 +583,39 @@ const setupWebSocket = () => {
   // 连接 WebSocket
   wsService.connect()
 
-  // 订阅当前股票详情
-  wsService.subscribeStockDetail(symbol)
+  // 订阅当前股票
+  wsService.subscribeStocks([symbol])
 
-  // 监听股票详情更新
-  wsService.onMessage('stockDetail', (data) => {
-    if (data.symbol === symbol && data.data) {
-      // 更新股票详情
-      stockDetail.value = { ...stockDetail.value, ...data.data }
-      console.log('收到实时数据更新:', data.data.currentPrice)
+  // 监听市场行情数据
+  wsService.onMessage('marketData', (data) => {
+    if (data.stocks && data.stocks.length > 0) {
+      const stock = data.stocks.find((s: any) => s.symbol === symbol)
+      if (stock && stockDetail.value) {
+        const oldPrice = stockDetail.value.currentPrice
+        const newPrice = stock.currentPrice
+
+        // 更新股票详情
+        stockDetail.value.currentPrice = stock.currentPrice
+        stockDetail.value.changePrice = stock.changePrice
+        stockDetail.value.changePercent = stock.changePercent
+        stockDetail.value.volume = stock.volume
+        stockDetail.value.amount = stock.amount
+        stockDetail.value.highPrice = stock.highPrice
+        stockDetail.value.lowPrice = stock.lowPrice
+        stockDetail.value.openPrice = stock.openPrice
+        stockDetail.value.preClose = stock.preClose
+
+        // 触发价格跳动动画
+        if (oldPrice !== newPrice) {
+          priceFlashDirection.value = newPrice > oldPrice ? 'up' : 'down'
+          isPriceFlashing.value = true
+          setTimeout(() => {
+            isPriceFlashing.value = false
+          }, 500)
+        }
+
+        console.log('收到实时数据更新:', newPrice)
+      }
     }
   })
 
@@ -656,6 +684,53 @@ onUnmounted(() => {
 .current-price {
   font-size: 36px;
   font-weight: bold;
+  transition: all 0.3s ease;
+}
+
+.price-flash-up {
+  animation: price-flash-up 0.5s ease-out;
+}
+
+.price-flash-down {
+  animation: price-flash-down 0.5s ease-out;
+}
+
+@keyframes price-flash-up {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
+  25% {
+    transform: scale(1.15);
+    text-shadow: 0 0 15px rgba(245, 108, 108, 0.6);
+  }
+  50% {
+    transform: scale(1.08);
+    text-shadow: 0 0 8px rgba(245, 108, 108, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
+}
+
+@keyframes price-flash-down {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
+  25% {
+    transform: scale(1.15);
+    text-shadow: 0 0 15px rgba(103, 194, 58, 0.6);
+  }
+  50% {
+    transform: scale(1.08);
+    text-shadow: 0 0 8px rgba(103, 194, 58, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
 }
 
 .price-change {
