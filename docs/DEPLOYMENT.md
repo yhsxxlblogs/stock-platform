@@ -661,6 +661,9 @@ EXPLAIN SELECT * FROM stock_basic WHERE symbol = '600519';
 # Redis配置优化
 docker exec stock-redis redis-cli CONFIG SET maxmemory 256mb
 docker exec stock-redis redis-cli CONFIG SET maxmemory-policy allkeys-lru
+
+# 注意：实时数据（价格、涨跌幅）不使用Redis缓存
+# 实时数据通过WebSocket推送，K线历史数据使用Redis缓存（24小时）
 ```
 
 ### 3. JVM优化

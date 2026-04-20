@@ -8,6 +8,7 @@
 - 采用前后端分离架构，后端Spring Boot + 前端Vue3
 - 核心功能：实时行情、自选股管理、K线图、技术指标
 - 特色：容器启动自动同步5723只股票数据、WebSocket实时推送
+- 数据更新策略：实时数据WebSocket推送，K线数据Redis缓存
 - 部署：Docker容器化，支持2核2G服务器
 
 ### Q2: 为什么选择这个技术栈？
@@ -15,15 +16,17 @@
 - **Spring Boot**: 快速开发、生态丰富、微服务友好
 - **Vue3**: 组合式API更灵活、TypeScript支持好、性能优秀
 - **MySQL**: 成熟稳定、社区活跃、适合关系型数据
-- **Redis**: 高性能缓存、支持多种数据结构
+- **Redis**: 高性能缓存，主要用于K线历史数据缓存（实时数据不用Redis）
+- **WebSocket**: 实时数据推送，比轮询更高效
 - **Docker**: 环境一致性、便于部署、资源隔离
 
 ### Q3: 项目的主要难点是什么？
 **回答要点:**
 1. **WebSocket实时推送**: 需要维护大量连接，设计心跳机制和重连策略
 2. **股票数据同步**: 5723只股票的数据初始化和增量更新
-3. **性能优化**: 2核2G服务器上的资源限制和优化
-4. **跨域问题**: 开发环境和生产环境的CORS配置
+3. **数据更新策略**: 区分实时数据（WebSocket）和历史数据（Redis缓存）
+4. **性能优化**: 2核2G服务器上的资源限制和优化
+5. **跨域问题**: 开发环境和生产环境的CORS配置
 
 ---
 
@@ -52,22 +55,43 @@ String token = Jwts.builder()
 **回答要点:**
 1. **WebSocket连接**: 用户登录后建立WebSocket连接
 2. **订阅机制**: 连接时自动订阅用户的自选股
-3. **定时推送**: 使用@Scheduled每3秒推送一次价格更新
-4. **数据格式**: JSON格式，包含股票代码、价格、涨跌幅等
+3. **定时推送**: 使用@Scheduled每2秒推送一次价格更新
+4. **数据来源**: 从数据库读取，定时任务每5秒更新数据库
+5. **数据格式**: JSON格式，包含股票代码、价格、涨跌幅等
 
 **关键代码:**
 ```java
-@Scheduled(fixedRate = 3000)
-public void pushPriceUpdates() {
-    for (WebSocketSession session : sessions) {
-        List<String> symbols = getSubscribedStocks(session);
-        Map<String, Object> data = fetchRealtimeData(symbols);
-        session.sendMessage(new TextMessage(JSON.toJSONString(data)));
+@Scheduled(fixedRate = 2000)
+public void pushRealtimeData() {
+    for (WebSocketSession session : sessions.values()) {
+        if (session.isOpen()) {
+            Map<String, StockDTO> data = pushService.getClientStockData(session.getId());
+            String message = createMessage("marketData", data);
+            sendMessage(session, message);
+        }
     }
 }
 ```
 
-### Q6: 容器启动时如何自动同步股票数据？
+### Q6: 实时数据和历史数据的缓存策略有什么不同？
+**回答要点:**
+
+**实时数据（价格、涨跌幅等）:**
+- ❌ 不使用Redis缓存
+- ✅ 通过WebSocket实时推送
+- ✅ 定时任务每5秒更新到数据库
+- ✅ 用户请求时直接调用API获取最新数据
+
+**历史数据（K线图）:**
+- ✅ 使用Redis缓存（24小时过期）
+- ✅ 历史数据高度一致，适合缓存
+- ✅ 每日收盘后清除缓存，次日重新获取
+
+**原因:**
+- 实时数据变化频繁，缓存意义不大
+- K线历史数据稳定，缓存可以大幅减少API调用
+
+### Q7: 容器启动时如何自动同步股票数据？
 **回答要点:**
 1. **@PostConstruct**: 应用启动后自动执行初始化
 2. **数据检查**: 检查数据库中股票数量是否小于500
@@ -85,37 +109,40 @@ public void init() {
 }
 ```
 
-### Q7: 如何处理高并发请求？
+### Q8: 如何处理高并发请求？
 **回答要点:**
 1. **数据库连接池**: HikariCP，限制最大连接数10
-2. **Redis缓存**: 缓存热点数据，减少数据库查询
-3. **异步处理**: 使用@Async处理耗时操作
-4. **资源限制**: Docker容器CPU和内存限制
-5. **线程池**: 数据同步使用固定大小线程池
+2. **Redis缓存**: 缓存K线历史数据，减少数据库查询
+3. **WebSocket推送**: 避免轮询，减少服务器压力
+4. **异步处理**: 使用@Async处理耗时操作
+5. **资源限制**: Docker容器CPU和内存限制
+6. **线程池**: 数据同步使用固定大小线程池（2线程）
 
-### Q8: 项目的安全设计有哪些？
+### Q9: 项目的安全设计有哪些？
 **回答要点:**
 1. **JWT认证**: Token-based认证，支持过期和刷新
 2. **密码加密**: BCrypt加密，防止明文存储
 3. **CORS配置**: 配置允许的域名，防止跨域攻击
 4. **SQL注入防护**: 使用JPA参数化查询
 5. **接口权限**: Spring Security控制接口访问权限
+6. **文件上传限制**: 限制文件类型和大小
 
-### Q9: 数据库表设计有哪些考虑？
+### Q10: 收盘后的数据更新逻辑是什么？
 **回答要点:**
-1. **索引设计**: symbol字段建立唯一索引，提高查询效率
-2. **字段类型**: 价格使用DECIMAL避免浮点数精度问题
-3. **时间戳**: created_at和updated_at记录数据变更
-4. **软删除**: status字段控制数据状态，不物理删除
-5. **外键约束**: favorites表关联users和stocks表
 
-### Q10: 如何实现股票搜索的自动补全？
-**回答要点:**
-1. **数据库查询**: 使用LIKE模糊查询symbol和name字段
-2. **索引优化**: 为symbol和name字段建立索引
-3. **前端防抖**: 输入延迟300ms后发送请求
-4. **结果限制**: 最多返回10条建议
-5. **高亮显示**: 前端对匹配关键词高亮
+**交易时间:**
+- 定时任务每5秒更新所有股票到数据库
+- WebSocket每2秒从数据库推送数据
+
+**收盘后:**
+- 定时任务停止更新
+- 用户查看自选股时，调用API获取最新数据
+- 获取后更新到数据库（保留收盘数据）
+- WebSocket继续从数据库推送
+
+**K线数据:**
+- 收盘后清除Redis缓存
+- 次日开盘前重新获取最新K线数据
 
 ---
 
@@ -164,6 +191,19 @@ export const useUserStore = defineStore('user', {
 4. **消息处理**: 根据消息类型分发到不同处理器
 5. **组件订阅**: 组件挂载时订阅，卸载时取消订阅
 
+**关键代码:**
+```typescript
+// WebSocket消息监听
+wsService.onMessage('marketData', (data) => {
+  if (data.stocks) {
+    updateStockList(data.stocks)
+  }
+})
+
+// 订阅股票
+wsService.subscribeStocks(['600519', '000001'])
+```
+
 ### Q14: 前端如何进行性能优化？
 **回答要点:**
 1. **路由懒加载**: 使用import()动态导入组件
@@ -171,6 +211,7 @@ export const useUserStore = defineStore('user', {
 3. **Gzip压缩**: 启用Nginx Gzip压缩
 4. **缓存策略**: 合理设置浏览器缓存
 5. **代码分割**: Vite自动代码分割
+6. **虚拟滚动**: 大量数据时使用虚拟滚动
 
 ### Q15: 如何实现K线图的绘制？
 **回答要点:**
@@ -178,7 +219,8 @@ export const useUserStore = defineStore('user', {
 2. **数据格式**: 开盘价、收盘价、最低价、最高价、成交量
 3. **图表切换**: 支持K线图和分时图切换
 4. **技术指标**: 叠加MACD、KDJ等指标
-5. **实时更新**: WebSocket推送新数据时更新图表
+5. **数据缓存**: K线数据Redis缓存24小时
+6. **实时更新**: WebSocket推送新数据时更新图表
 
 ---
 
@@ -221,6 +263,7 @@ deploy:
 2. **日志收集**: 使用docker logs收集容器日志
 3. **关键指标**: 监控CPU、内存、数据库连接数
 4. **告警机制**: 异常情况发送告警通知
+5. **WebSocket监控**: 监控连接数和推送延迟
 
 ### Q20: 如何处理数据库备份和恢复？
 **回答要点:**
@@ -235,16 +278,18 @@ deploy:
 
 ### 项目亮点
 1. **完整的数据链路**: 从数据爬取、存储、展示到实时推送
-2. **容器化部署**: 一键部署，环境一致性
-3. **性能优化**: 适配低配置服务器
-4. **用户体验**: 实时推送、自动补全、K线图
-5. **代码质量**: 规范的项目结构、完善的注释
+2. **智能缓存策略**: 区分实时数据和历史数据，合理使用缓存
+3. **容器化部署**: 一键部署，环境一致性
+4. **性能优化**: 适配低配置服务器
+5. **用户体验**: 实时推送、自动补全、K线图、数据跳动动画
+6. **代码质量**: 规范的项目结构、完善的注释
 
 ### 技术难点
 1. **WebSocket高并发**: 维护大量长连接，设计合理的推送策略
-2. **大数据量处理**: 5723只股票的初始化和更新
-3. **资源限制**: 2核2G服务器上的性能优化
-4. **数据一致性**: 多数据源的数据同步和一致性保证
+2. **数据更新策略**: 实时数据WebSocket推送，历史数据Redis缓存
+3. **大数据量处理**: 5723只股票的初始化和更新
+4. **资源限制**: 2核2G服务器上的性能优化
+5. **数据一致性**: 多数据源的数据同步和一致性保证
 
 ---
 
@@ -257,6 +302,7 @@ deploy:
 3. **移动端**: 开发小程序或App
 4. **多数据源**: 支持多个股票数据源，提高数据可靠性
 5. **AI集成**: 使用机器学习预测股价走势
+6. **分布式部署**: 使用Kubernetes管理容器
 
 ### Q22: 项目中遇到的最大挑战是什么？
 **回答要点:**
@@ -265,16 +311,18 @@ deploy:
 - **解决**: 
   1. 设计心跳机制检测连接状态
   2. 实现自动重连机制
-  3. 使用Redis存储订阅关系，支持分布式部署
+  3. 使用数据库持久化订阅关系
   4. 添加日志监控，及时发现问题
+  5. 优化数据更新策略，区分实时和历史数据
 
 ### Q23: 如何保证数据的实时性和准确性？
 **回答要点:**
-1. **多数据源对比**: 同时使用腾讯和东方财富API
-2. **数据校验**: 检查价格变动幅度是否合理
-3. **异常处理**: API失败时返回缓存数据
-4. **监控告警**: 数据异常时发送告警
-5. **人工复核**: 关键数据提供人工复核机制
+1. **实时数据**: WebSocket推送，定时任务每5秒更新数据库
+2. **历史数据**: Redis缓存24小时，收盘后清除
+3. **数据校验**: 检查价格变动幅度是否合理
+4. **异常处理**: API失败时返回缓存数据
+5. **监控告警**: 数据异常时发送告警
+6. **多数据源**: 同时使用腾讯和东方财富API
 
 ---
 
@@ -282,21 +330,25 @@ deploy:
 
 ### Q24: 解释这段代码的作用
 ```java
-@Scheduled(fixedRate = 3000)
-public void pushPriceUpdates() {
-    for (WebSocketSession session : sessions) {
-        List<String> symbols = getSubscribedStocks(session);
-        Map<String, Object> data = fetchRealtimeData(symbols);
-        session.sendMessage(new TextMessage(JSON.toJSONString(data)));
+@Scheduled(fixedRate = 5000)
+public void updateRealtimeData() {
+    if (!isTradingTime()) return;
+    
+    List<Stock> stocks = stockRepository.findByStatus(1);
+    List<List<Stock>> batches = Lists.partition(stocks, BATCH_SIZE);
+    
+    for (List<Stock> batch : batches) {
+        List<StockDTO> data = tencentStockDataService.getRealtimeDataBatch(batch);
+        saveToDatabase(data);
     }
 }
 ```
 **回答:**
-- 使用Spring的@Scheduled注解，每3秒执行一次
-- 遍历所有WebSocket会话
-- 获取每个会话订阅的股票列表
-- 从API获取实时数据
-- 将数据转换为JSON格式发送给客户端
+- 使用Spring的@Scheduled注解，每5秒执行一次
+- 只在交易时间执行（9:25-11:35, 12:55-15:05）
+- 获取所有股票，分批处理（每批100只）
+- 调用腾讯API获取实时数据
+- 保存到数据库供WebSocket推送使用
 
 ### Q25: 如何处理跨域问题？
 **回答:**
@@ -328,9 +380,11 @@ public CorsConfigurationSource corsConfigurationSource() {
 2. **架构设计能力**: 微服务、容器化、性能优化
 3. **问题解决能力**: 高并发、大数据量、资源限制
 4. **工程化能力**: 代码规范、Git管理、文档编写
+5. **业务理解能力**: 股票行情业务逻辑、数据更新策略
 
 建议面试时：
 - 结合具体代码讲解
 - 强调自己的贡献和思考
 - 展示解决问题的能力
 - 说明项目的商业价值
+- 重点讲解数据更新策略和缓存设计
