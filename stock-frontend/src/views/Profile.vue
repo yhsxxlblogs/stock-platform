@@ -106,20 +106,34 @@ const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726
 
 // 头像URL（添加时间戳避免缓存）
 const avatarUrl = computed(() => {
-  let baseUrl = userStore.user?.avatar || defaultAvatar
-  console.log('当前头像URL:', baseUrl, '用户:', userStore.user)
+  if (!userStore.user) return defaultAvatar
+  
+  const avatar = userStore.user.avatar
+  if (!avatar) return defaultAvatar
   
   // 如果是默认头像，直接返回
-  if (baseUrl === defaultAvatar) return baseUrl
+  if (avatar === defaultAvatar) return avatar
   
-  // 后端返回的路径已经是 /api/files/...，直接使用
-  // Nginx 会将 /api/... 代理到后端
+  // 处理头像URL
+  let finalUrl = avatar
+  
+  // 如果是完整URL，直接使用
+  if (avatar.startsWith('http')) {
+    finalUrl = avatar
+  } else if (avatar.startsWith('/files/')) {
+    // 如果是 /files/ 开头，添加 /api 前缀
+    finalUrl = '/api' + avatar
+  } else if (avatar.startsWith('/api/')) {
+    // 已经是 /api/ 开头，直接使用
+    finalUrl = avatar
+  }
   
   // 添加时间戳避免缓存
-  const separator = baseUrl.includes('?') ? '&' : '?'
-  const finalUrl = `${baseUrl}${separator}t=${avatarTimestamp.value}`
-  console.log('最终头像URL:', finalUrl)
-  return finalUrl
+  const separator = finalUrl.includes('?') ? '&' : '?'
+  const urlWithTimestamp = `${finalUrl}${separator}t=${avatarTimestamp.value}`
+  
+  console.log('头像URL:', avatar, '最终URL:', urlWithTimestamp)
+  return urlWithTimestamp
 })
 
 // 上传请求头
@@ -232,6 +246,10 @@ const handleAvatarSuccess = async (response: any) => {
   if (response.code === 200) {
     const newAvatarUrl = response.data
     console.log('新头像URL:', newAvatarUrl)
+    
+    // 先更新时间戳强制刷新头像显示
+    avatarTimestamp.value = Date.now()
+    
     // 更新本地用户信息 - 从localStorage获取或创建新对象
     const currentUser = userStore.user || JSON.parse(localStorage.getItem('user') || '{}')
     if (currentUser && currentUser.id) {
@@ -241,11 +259,12 @@ const handleAvatarSuccess = async (response: any) => {
     } else {
       console.warn('无法更新用户信息：用户未登录')
     }
-    // 更新时间戳强制刷新头像显示
-    avatarTimestamp.value = Date.now()
+    
     // 更新服务器上的用户信息
     try {
       await updateProfile({ avatar: newAvatarUrl })
+      // 再次刷新用户信息确保同步
+      await fetchUserInfo()
       ElMessage.success('头像上传成功')
     } catch (error) {
       console.error('更新头像到用户信息失败:', error)

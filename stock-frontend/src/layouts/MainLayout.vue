@@ -47,7 +47,7 @@
     </el-main>
     
     <el-footer class="footer">
-      <p>© 2024 MarketPulse - 专业股票行情分析平台</p>
+      <p>© 2026 MarketPulse - 专业股票行情分析平台</p>
     </el-footer>
   </el-container>
 </template>

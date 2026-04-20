@@ -8,7 +8,7 @@
         </div>
       </template>
 
-      <el-table :data="favorites" style="width: 100%" v-loading="loading">
+      <el-table :data="favorites" style="width: 100%" v-loading="loading" :row-class-name="getRowFlashClass">
         <el-table-column prop="symbol" label="代码" width="100">
           <template #default="{ row }">
             <el-link type="primary" @click="goToDetail(row.symbol)">{{ row.symbol }}</el-link>
@@ -48,27 +48,70 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getFavorites, removeFavorite as removeFavoriteApi } from '@/api/favorites'
+import { wsService } from '@/services/websocket'
 import type { Stock } from '@/api/stock'
 
 const router = useRouter()
 const loading = ref(false)
 const favorites = ref<Stock[]>([])
 
+// 闪烁动画状态
+const flashingStocks = ref<Set<string>>(new Set())
+
 const fetchFavorites = async () => {
   loading.value = true
   try {
     const res: any = await getFavorites()
     favorites.value = res.data || []
+    // 订阅自选股到WebSocket
+    subscribeFavorites()
   } catch (error) {
     console.error('获取自选股失败:', error)
     ElMessage.error('获取自选股失败，请检查是否已登录')
   } finally {
     loading.value = false
   }
+}
+
+// 订阅自选股到WebSocket
+const subscribeFavorites = () => {
+  if (favorites.value.length > 0) {
+    const symbols = favorites.value.map(s => s.symbol)
+    wsService.subscribeStocks(symbols)
+    console.log('自选股页面订阅:', symbols)
+  }
+}
+
+// 更新自选股数据
+const updateFavorites = (newStocks: any[]) => {
+  newStocks.forEach((newStock: any) => {
+    const index = favorites.value.findIndex(s => s.symbol === newStock.symbol)
+    if (index !== -1) {
+      const oldPrice = favorites.value[index].currentPrice
+      favorites.value[index].currentPrice = newStock.currentPrice
+      favorites.value[index].changePrice = newStock.changePrice
+      favorites.value[index].changePercent = newStock.changePercent
+      favorites.value[index].volume = newStock.volume
+      favorites.value[index].amount = newStock.amount
+
+      // 价格变化时触发闪烁
+      if (oldPrice !== newStock.currentPrice) {
+        flashingStocks.value.add(newStock.symbol)
+        setTimeout(() => {
+          flashingStocks.value.delete(newStock.symbol)
+        }, 500)
+      }
+    }
+  })
+}
+
+// 获取行闪烁类名
+const getRowFlashClass = (row: Stock) => {
+  return flashingStocks.value.has(row.symbol) ? 'price-flash' : ''
 }
 
 const goToDetail = (symbol: string) => {
@@ -118,8 +161,30 @@ const formatVolume = (volume?: number) => {
   return volume.toString()
 }
 
+// WebSocket 设置
+const setupWebSocket = () => {
+  wsService.connect()
+
+  // 监听实时数据
+  wsService.onMessage('marketData', (data) => {
+    if (data.stocks && data.stocks.length > 0) {
+      updateFavorites(data.stocks)
+    }
+  })
+
+  // 连接成功后订阅
+  wsService.onMessage('connected', () => {
+    subscribeFavorites()
+  })
+}
+
 onMounted(() => {
   fetchFavorites()
+  setupWebSocket()
+})
+
+onUnmounted(() => {
+  wsService.disconnect()
 })
 </script>
 
@@ -143,5 +208,22 @@ onMounted(() => {
 .down {
   color: #00aa00;
   font-weight: 600;
+}
+
+/* 价格闪烁动画 */
+.price-flash {
+  animation: price-flash 0.5s ease-out;
+}
+
+@keyframes price-flash {
+  0% {
+    background-color: rgba(255, 255, 0, 0.3);
+  }
+  50% {
+    background-color: rgba(255, 255, 0, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 </style>
