@@ -127,7 +127,9 @@
             <div class="index-name">{{ item.name }}</div>
             <div class="index-value" :class="{ 'number-flash': flashingIndices.has(item.name) }">{{ item.currentPrice?.toFixed(2) || '-' }}</div>
             <div class="index-change" :class="getPriceClass(item.changePercent)">
-              {{ item.changePercent > 0 ? '↑' : item.changePercent < 0 ? '↓' : '-' }}
+              <span class="change-arrow">{{ item.changePercent > 0 ? '↑' : item.changePercent < 0 ? '↓' : '-' }}</span>
+              <span class="change-points">{{ item.changePrice > 0 ? '+' : '' }}{{ item.changePrice?.toFixed(2) || '0.00' }}</span>
+              <span class="change-percent">{{ item.changePercent > 0 ? '+' : '' }}{{ item.changePercent?.toFixed(2) || '0.00' }}%</span>
             </div>
           </el-card>
         </el-col>
@@ -933,9 +935,29 @@ html, body {
 }
 
 .index-change {
-  font-size: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.change-arrow {
+  font-size: 16px;
   font-weight: bold;
-  margin-top: 5px;
+}
+
+.change-points {
+  font-size: 13px;
+}
+
+.change-percent {
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* 涨跌颜色 - 加深更醒目 */
