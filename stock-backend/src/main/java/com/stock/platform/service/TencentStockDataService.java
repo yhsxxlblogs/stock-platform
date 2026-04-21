@@ -838,19 +838,18 @@ public class TencentStockDataService {
 
                             if (fields.length >= 35) {
                                 MarketIndexData indexData = new MarketIndexData();
-                                // 大盘指数数据格式与个股不同！
+                                // 大盘指数数据格式：
                                 // fields[3] = 当前价格
                                 // fields[4] = 昨收
-                                // fields[32] = 涨跌额 (注意：大盘是32，个股是31)
-                                // fields[33] = 涨跌幅(%) (注意：大盘是33，个股是32)
+                                // fields[31] = 涨跌额
+                                // fields[32] = 涨跌幅(%)
                                 indexData.setCurrentPrice(new BigDecimal(fields[3]));
                                 indexData.setPreClose(new BigDecimal(fields[4]));
 
-                                // 直接使用腾讯返回的涨跌额和涨跌幅
-                                // 大盘指数：fields[32]=涨跌额, fields[33]=涨跌幅%
-                                if (fields.length > 32 && !fields[32].isEmpty()) {
-                                    // 腾讯API返回的涨跌额已经是正确的格式
-                                    indexData.setChangePrice(new BigDecimal(fields[32]));
+                                // 使用腾讯返回的涨跌额和涨跌幅
+                                // 大盘指数：fields[31]=涨跌额, fields[32]=涨跌幅%
+                                if (fields.length > 31 && !fields[31].isEmpty()) {
+                                    indexData.setChangePrice(new BigDecimal(fields[31]));
                                 } else {
                                     // 如果没有返回，自己计算
                                     BigDecimal changePrice = indexData.getCurrentPrice()
@@ -858,9 +857,9 @@ public class TencentStockDataService {
                                     indexData.setChangePrice(changePrice);
                                 }
 
-                                if (fields.length > 33 && !fields[33].isEmpty()) {
-                                    // 腾讯API返回的涨跌幅已经是百分比值（如1.23表示1.23%）
-                                    indexData.setChangePercent(new BigDecimal(fields[33]));
+                                if (fields.length > 32 && !fields[32].isEmpty()) {
+                                    // 腾讯API返回的涨跌幅已经是百分比值（如0.07表示0.07%）
+                                    indexData.setChangePercent(new BigDecimal(fields[32]));
                                 } else {
                                     // 如果没有返回，自己计算
                                     BigDecimal changePercent = indexData.getChangePrice()
