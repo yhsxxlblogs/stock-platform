@@ -472,14 +472,10 @@ const formatAmount = (amount?: number) => {
 const getPriceClass = (changePercent?: number) => {
   if (changePercent === undefined || changePercent === null) return ''
   
-  // 处理百分比值：如果是小数格式，需要先转换为百分比
-  let processedChangePercent = changePercent
-  if (Math.abs(changePercent) < 1) {
-    processedChangePercent = changePercent * 100
-  }
-  
-  if (processedChangePercent > 0) return 'up'
-  if (processedChangePercent < 0) return 'down'
+  // 直接使用传入的涨跌幅值判断涨跌
+  // 后端返回的涨跌幅已经是正确的百分比值（如0.07表示0.07%）
+  if (changePercent > 0) return 'up'
+  if (changePercent < 0) return 'down'
   return 'flat'
 }
 
@@ -487,17 +483,10 @@ const getPriceClass = (changePercent?: number) => {
 const formatChangePercent = (changePercent?: number) => {
   if (changePercent === undefined || changePercent === null) return '0.00%'
   
-  // 处理百分比值：
-  // - 如果值小于1，说明是小数格式（如0.0123表示1.23%），需要乘以100
-  // - 否则直接使用（已经是百分比格式）
-  let displayValue = changePercent
-  if (Math.abs(changePercent) < 1) {
-    // 是小数格式，转换为百分比
-    displayValue = changePercent * 100
-  }
-  
-  const sign = displayValue > 0 ? '+' : ''
-  return `${sign}${displayValue.toFixed(2)}%`
+  // 直接使用传入的值显示
+  // 后端返回的涨跌幅已经是正确的百分比值（如0.07表示0.07%）
+  const sign = changePercent > 0 ? '+' : ''
+  return `${sign}${changePercent.toFixed(2)}%`
 }
 
 // 格式化大盘指数涨跌额
