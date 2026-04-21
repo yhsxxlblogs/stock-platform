@@ -849,6 +849,7 @@ public class TencentStockDataService {
                                 // 直接使用腾讯返回的涨跌额和涨跌幅
                                 // 大盘指数：fields[32]=涨跌额, fields[33]=涨跌幅%
                                 if (fields.length > 32 && !fields[32].isEmpty()) {
+                                    // 腾讯API返回的涨跌额已经是正确的格式
                                     indexData.setChangePrice(new BigDecimal(fields[32]));
                                 } else {
                                     // 如果没有返回，自己计算
@@ -858,6 +859,7 @@ public class TencentStockDataService {
                                 }
 
                                 if (fields.length > 33 && !fields[33].isEmpty()) {
+                                    // 腾讯API返回的涨跌幅已经是百分比值（如1.23表示1.23%）
                                     indexData.setChangePercent(new BigDecimal(fields[33]));
                                 } else {
                                     // 如果没有返回，自己计算

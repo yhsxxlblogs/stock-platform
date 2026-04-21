@@ -306,22 +306,26 @@ public class EastMoneyStockService {
                     BigDecimal currentPrice = parseBigDecimal(data.get("f43"));
                     BigDecimal preClose = parseBigDecimal(data.get("f60"));
 
-                    // 除以100转换为元
-                    if (currentPrice != null) {
-                        currentPrice = currentPrice.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                    }
-                    if (preClose != null) {
-                        preClose = preClose.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                    }
-
-                    indexData.setCurrentPrice(currentPrice);
-                    indexData.setPreClose(preClose);
-
                     if (currentPrice != null && preClose != null && preClose.compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal changePrice = currentPrice.subtract(preClose);
-                        BigDecimal changePercent = changePrice.multiply(BigDecimal.valueOf(100))
+                        // 计算涨跌额（分）
+                        BigDecimal changePriceInFen = currentPrice.subtract(preClose);
+                        // 计算涨跌幅（基于分的价格）
+                        BigDecimal changePercent = changePriceInFen.multiply(BigDecimal.valueOf(100))
                                 .divide(preClose, 2, RoundingMode.HALF_UP);
-                        indexData.setChangePrice(changePrice);
+                        
+                        // 转换为元
+                        if (currentPrice != null) {
+                            currentPrice = currentPrice.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                        }
+                        if (preClose != null) {
+                            preClose = preClose.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                        }
+                        // 转换涨跌额为元
+                        BigDecimal changePriceInYuan = changePriceInFen.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+                        indexData.setCurrentPrice(currentPrice);
+                        indexData.setPreClose(preClose);
+                        indexData.setChangePrice(changePriceInYuan);
                         indexData.setChangePercent(changePercent);
                     }
 
