@@ -470,16 +470,33 @@ const formatAmount = (amount?: number) => {
 // 获取价格样式类
 const getPriceClass = (changePercent?: number) => {
   if (changePercent === undefined || changePercent === null) return ''
-  if (changePercent > 0) return 'up'
-  if (changePercent < 0) return 'down'
+  
+  // 处理百分比值：如果是小数格式，需要先转换为百分比
+  let processedChangePercent = changePercent
+  if (Math.abs(changePercent) < 1) {
+    processedChangePercent = changePercent * 100
+  }
+  
+  if (processedChangePercent > 0) return 'up'
+  if (processedChangePercent < 0) return 'down'
   return 'flat'
 }
 
 // 格式化涨跌幅显示
 const formatChangePercent = (changePercent?: number) => {
   if (changePercent === undefined || changePercent === null) return '0.00%'
-  const sign = changePercent > 0 ? '+' : ''
-  return `${sign}${changePercent.toFixed(2)}%`
+  
+  // 处理百分比值：
+  // - 如果值小于1，说明是小数格式（如0.0123表示1.23%），需要乘以100
+  // - 否则直接使用（已经是百分比格式）
+  let displayValue = changePercent
+  if (Math.abs(changePercent) < 1) {
+    // 是小数格式，转换为百分比
+    displayValue = changePercent * 100
+  }
+  
+  const sign = displayValue > 0 ? '+' : ''
+  return `${sign}${displayValue.toFixed(2)}%`
 }
 
 // 格式化大盘指数涨跌额
