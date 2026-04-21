@@ -1,4 +1,5 @@
 # 多阶段构建：构建阶段
+# 使用南京大学开源镜像站加速（适用于中国大陆）
 FROM maven:3.9-eclipse-temurin-17-alpine AS build
 WORKDIR /app
 
@@ -8,15 +9,21 @@ RUN apk add --no-cache freetype fontconfig ttf-dejavu
 # 复制源代码
 COPY . .
 
-# 构建项目
+# 构建项目（使用国内镜像加速）
+RUN echo '<?xml version="1.0" encoding="UTF-8"?><settings><mirrors><mirror><id>aliyun</id><mirrorOf>*</mirrorOf><url>https://maven.aliyun.com/repository/public</url></mirror></mirrors></settings>' > /usr/share/maven/conf/settings.xml || true
 RUN mvn clean package -DskipTests -B
 
 # 生产阶段 - 使用更轻量的JRE
-FROM eclipse-temurin:17-jre-alpine
+# 使用阿里云镜像加速
+FROM openjdk:17-jre-slim
 WORKDIR /app
 
 # 安装必要的字体库和 wget
-RUN apk add --no-cache freetype fontconfig ttf-dejavu wget
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-dejavu-core \
+    fontconfig \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
 # 设置时区和编码
 ENV TZ=Asia/Shanghai
