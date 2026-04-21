@@ -126,9 +126,8 @@
           <el-card class="index-card" :class="[getPriceClass(item.changePercent), getIndexFlashClass(item.name)]">
             <div class="index-name">{{ item.name }}</div>
             <div class="index-value" :class="{ 'number-flash': flashingIndices.has(item.name) }">{{ item.currentPrice?.toFixed(2) || '-' }}</div>
-            <div class="index-change">
-              <span>{{ formatIndexChange(item.changePrice) }}</span>
-              <span>({{ formatChangePercent(item.changePercent) }})</span>
+            <div class="index-change" :class="getPriceClass(item.changePercent)">
+              {{ item.changePercent > 0 ? '↑' : item.changePercent < 0 ? '↓' : '-' }}
             </div>
           </el-card>
         </el-col>
@@ -700,6 +699,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 隐藏滚动条 */
+::-webkit-scrollbar {
+  display: none;
+}
+
+html, body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 .home {
   max-width: 1200px;
   margin: 0 auto;
@@ -924,7 +933,9 @@ onUnmounted(() => {
 }
 
 .index-change {
-  font-size: 14px;
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 5px;
 }
 
 /* 涨跌颜色 - 加深更醒目 */
