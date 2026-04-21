@@ -92,17 +92,17 @@ public class StockDataService {
     }
 
     /**
-     * 获取大盘指数（从东方财富API获取真实数据）
+     * 获取大盘指数（优先从腾讯API获取，失败则使用东方财富API）
      */
     @Transactional(readOnly = true)
     public List<MarketIndexDTO> getMarketIndices() {
         List<MarketIndexDTO> indices = new ArrayList<>();
 
-        // 从东方财富API获取大盘指数，失败则使用腾讯API
+        // 优先从腾讯API获取大盘指数，失败则使用东方财富API
         // 上证指数
-        var shIndex = eastMoneyStockService.getMarketIndex("1.000001");
+        var shIndex = tencentStockDataService.getMarketIndex("1.000001");
         if (shIndex == null || shIndex.getCurrentPrice() == null) {
-            shIndex = tencentStockDataService.getMarketIndex("1.000001");
+            shIndex = eastMoneyStockService.getMarketIndex("1.000001");
         }
         if (shIndex != null && shIndex.getCurrentPrice() != null) {
             indices.add(MarketIndexDTO.builder()
@@ -117,9 +117,9 @@ public class StockDataService {
         }
 
         // 深证成指
-        var szIndex = eastMoneyStockService.getMarketIndex("0.399001");
+        var szIndex = tencentStockDataService.getMarketIndex("0.399001");
         if (szIndex == null || szIndex.getCurrentPrice() == null) {
-            szIndex = tencentStockDataService.getMarketIndex("0.399001");
+            szIndex = eastMoneyStockService.getMarketIndex("0.399001");
         }
         if (szIndex != null && szIndex.getCurrentPrice() != null) {
             indices.add(MarketIndexDTO.builder()
@@ -134,9 +134,9 @@ public class StockDataService {
         }
 
         // 创业板指
-        var cyIndex = eastMoneyStockService.getMarketIndex("0.399006");
+        var cyIndex = tencentStockDataService.getMarketIndex("0.399006");
         if (cyIndex == null || cyIndex.getCurrentPrice() == null) {
-            cyIndex = tencentStockDataService.getMarketIndex("0.399006");
+            cyIndex = eastMoneyStockService.getMarketIndex("0.399006");
         }
         if (cyIndex != null && cyIndex.getCurrentPrice() != null) {
             indices.add(MarketIndexDTO.builder()
@@ -151,9 +151,9 @@ public class StockDataService {
         }
 
         // 科创50
-        var kcIndex = eastMoneyStockService.getMarketIndex("1.000688");
+        var kcIndex = tencentStockDataService.getMarketIndex("1.000688");
         if (kcIndex == null || kcIndex.getCurrentPrice() == null) {
-            kcIndex = tencentStockDataService.getMarketIndex("1.000688");
+            kcIndex = eastMoneyStockService.getMarketIndex("1.000688");
         }
         if (kcIndex != null && kcIndex.getCurrentPrice() != null) {
             indices.add(MarketIndexDTO.builder()
