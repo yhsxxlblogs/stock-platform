@@ -307,24 +307,31 @@ public class EastMoneyStockService {
                     BigDecimal preClose = parseBigDecimal(data.get("f60"));
 
                     if (currentPrice != null && preClose != null && preClose.compareTo(BigDecimal.ZERO) > 0) {
-                        // 计算涨跌额（分）
-                        BigDecimal changePriceInFen = currentPrice.subtract(preClose);
-                        // 计算涨跌幅（基于分的价格）
-                        BigDecimal changePercent = changePriceInFen.multiply(BigDecimal.valueOf(100))
-                                .divide(preClose, 2, RoundingMode.HALF_UP);
+                        // 判断preClose的单位：如果值很小（<1000），说明已经是"元"为单位
+                        // 如果值很大（>10000），说明是"分"为单位
+                        boolean isPreCloseInYuan = preClose.compareTo(new BigDecimal("1000")) < 0;
                         
-                        // 转换为元
-                        if (currentPrice != null) {
-                            currentPrice = currentPrice.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                        BigDecimal currentPriceInYuan;
+                        BigDecimal preCloseInYuan;
+                        
+                        if (isPreCloseInYuan) {
+                            // preClose已经是元，currentPrice也是元
+                            currentPriceInYuan = currentPrice;
+                            preCloseInYuan = preClose;
+                        } else {
+                            // preClose是分，需要转换
+                            currentPriceInYuan = currentPrice.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                            preCloseInYuan = preClose.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
                         }
-                        if (preClose != null) {
-                            preClose = preClose.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                        }
-                        // 转换涨跌额为元
-                        BigDecimal changePriceInYuan = changePriceInFen.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                        
+                        // 计算涨跌额（元）
+                        BigDecimal changePriceInYuan = currentPriceInYuan.subtract(preCloseInYuan);
+                        // 计算涨跌幅（基于元的价格）
+                        BigDecimal changePercent = changePriceInYuan.multiply(BigDecimal.valueOf(100))
+                                .divide(preCloseInYuan, 2, RoundingMode.HALF_UP);
 
-                        indexData.setCurrentPrice(currentPrice);
-                        indexData.setPreClose(preClose);
+                        indexData.setCurrentPrice(currentPriceInYuan);
+                        indexData.setPreClose(preCloseInYuan);
                         indexData.setChangePrice(changePriceInYuan);
                         indexData.setChangePercent(changePercent);
                     }

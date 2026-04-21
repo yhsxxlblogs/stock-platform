@@ -1174,30 +1174,26 @@ onUnmounted(() => {
 @keyframes index-up-flash {
   0% {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    transform: scale(1);
   }
   50% {
-    box-shadow: 0 4px 20px rgba(245, 108, 108, 0.4);
-    transform: scale(1.02);
+    box-shadow: 0 4px 20px rgba(255, 0, 0, 0.4);
+    background-color: rgba(255, 0, 0, 0.05);
   }
   100% {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    transform: scale(1);
   }
 }
 
 @keyframes index-down-flash {
   0% {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    transform: scale(1);
   }
   50% {
-    box-shadow: 0 4px 20px rgba(103, 194, 58, 0.4);
-    transform: scale(1.02);
+    box-shadow: 0 4px 20px rgba(0, 170, 0, 0.4);
+    background-color: rgba(0, 170, 0, 0.05);
   }
   100% {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    transform: scale(1);
   }
 }
 
