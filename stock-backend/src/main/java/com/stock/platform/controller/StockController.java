@@ -5,6 +5,7 @@ import com.stock.platform.entity.Stock;
 import com.stock.platform.entity.StockBasic;
 import com.stock.platform.repository.StockBasicRepository;
 import com.stock.platform.service.EastMoneyStockService;
+import com.stock.platform.service.StockCacheService;
 import com.stock.platform.service.StockDataService;
 import com.stock.platform.service.StockSyncService;
 import com.stock.platform.service.TencentStockDataService;
@@ -39,6 +40,9 @@ public class StockController {
 
     @Autowired
     private StockSyncService stockSyncService;
+
+    @Autowired
+    private StockCacheService stockCacheService;
 
     @Autowired
     private StockBasicRepository stockBasicRepository;
@@ -198,16 +202,33 @@ public class StockController {
             @PathVariable String symbol,
             @RequestParam(defaultValue = "1m") String period,
             @RequestParam(defaultValue = "100") int limit) {
-        // 优先使用东方财富API（更稳定）
-        List<KlineDataDTO> klineData = eastMoneyStockService.getKlineData(symbol, period);
-        if (klineData.isEmpty()) {
-            // 如果东方财富API失败，尝试腾讯API
-            klineData = tencentStockDataService.getKlineDataFromTencent(symbol, period);
+        // 优先从缓存获取K线数据
+        List<KlineDataDTO> klineData = stockCacheService.getCachedKlineData(symbol, period);
+
+        if (klineData == null || klineData.isEmpty()) {
+            // 缓存未命中，尝试从API获取
+            log.debug("K线缓存未命中，从API获取: {}, 周期: {}", symbol, period);
+
+            // 优先使用东方财富API
+            klineData = eastMoneyStockService.getKlineData(symbol, period);
+            if (klineData.isEmpty()) {
+                // 如果东方财富API失败，尝试腾讯API
+                klineData = tencentStockDataService.getKlineDataFromTencent(symbol, period);
+            }
+            if (klineData.isEmpty()) {
+                // 如果都失败，使用本地数据库
+                klineData = stockDataService.getKlineData(symbol, period, limit);
+            }
+
+            // 将获取到的数据缓存（24小时）
+            if (klineData != null && !klineData.isEmpty()) {
+                stockCacheService.cacheKlineData(symbol, period, klineData);
+                log.debug("K线数据已缓存: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
+            }
+        } else {
+            log.debug("K线数据从缓存获取: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
         }
-        if (klineData.isEmpty()) {
-            // 如果都失败，使用本地数据库
-            klineData = stockDataService.getKlineData(symbol, period, limit);
-        }
+
         return ResponseEntity.ok(ApiResponse.success(klineData));
     }
 

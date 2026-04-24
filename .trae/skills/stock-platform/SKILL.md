@@ -22,18 +22,22 @@ stock-platform/
 ├── stock-frontend/          # Vue3前端
 │   ├── src/
 │   │   ├── views/           # 页面组件
+│   │   │   └── Home.vue     # 首页（指数、热门股票、自选股）
 │   │   ├── api/             # API接口定义
+│   │   │   └── stock.ts     # 股票相关API
 │   │   ├── services/        # WebSocket服务
 │   │   └── store/           # Pinia状态管理
 │   └── Dockerfile
 ├── stock-backend/           # Spring Boot后端
 │   ├── src/main/java/com/stock/platform/
 │   │   ├── controller/      # REST API控制器
+│   │   │   └── StockController.java
 │   │   ├── service/         # 业务逻辑
 │   │   │   ├── TencentStockDataService.java  # 腾讯API对接
 │   │   │   ├── EastMoneyStockService.java    # 东方财富API对接
 │   │   │   └── StockDataService.java         # 数据聚合服务
 │   │   ├── dto/             # 数据传输对象
+│   │   │   └── MarketIndexDTO.java
 │   │   └── entity/          # 数据库实体
 │   └── Dockerfile
 ├── docker-compose.yml       # Docker编排配置
@@ -104,6 +108,74 @@ git push origin main
 cd /www/wwwroot/stock-platform && git pull
 ```
 
+## Redis操作
+
+### 进入Redis容器
+```bash
+# 进入Redis容器
+docker exec -it stock-redis sh
+
+# 使用redis-cli
+redis-cli
+
+# 常用命令
+KEYS *                    # 查看所有key
+GET <key>                 # 获取值
+DEL <key>                 # 删除key
+FLUSHALL                  # 清空所有数据（慎用）
+INFO                      # 查看Redis信息
+MONITOR                   # 实时监控命令
+```
+
+### 从宿主机直接操作Redis
+```bash
+# 执行Redis命令
+docker exec stock-redis redis-cli KEYS "*"
+
+# 获取特定key的值
+docker exec stock-redis redis-cli GET "stock:realtime:600519"
+
+# 删除特定key
+docker exec stock-redis redis-cli DEL "stock:cache:market-index"
+```
+
+## MySQL备份与恢复
+
+### 备份数据库
+```bash
+# 方式1: 进入容器执行备份
+docker exec stock-mysqldump -u root -p@Syh20050608 stock_platform > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 方式2: 先进入容器再备份
+docker exec -it stock-mysql bash
+mysqldump -u root -p@Syh20050608 stock_platform > /tmp/backup.sql
+exit
+docker cp stock-mysql:/tmp/backup.sql ./backup.sql
+```
+
+### 恢复数据库
+```bash
+# 将SQL文件复制到容器
+docker cp backup.sql stock-mysql:/tmp/backup.sql
+
+# 进入容器执行恢复
+docker exec -it stock-mysql bash
+mysql -u root -p@Syh20050608 stock_platform < /tmp/backup.sql
+```
+
+### 查看MySQL数据
+```bash
+# 进入MySQL容器
+docker exec -it stock-mysql mysql -u root -p@Syh20050608
+
+# 常用命令
+SHOW DATABASES;
+USE stock_platform;
+SHOW TABLES;
+SELECT * FROM stock LIMIT 10;
+SELECT * FROM stock_realtime_data WHERE symbol = '600519';
+```
+
 ## 常见问题
 
 ### 1. 指数数据不正确
@@ -125,6 +197,15 @@ docker-compose build --no-cache <service-name>
 docker-compose up -d <service-name>
 ```
 
+### 4. 清空Redis缓存
+```bash
+# 清空所有缓存
+docker exec stock-redis redis-cli FLUSHALL
+
+# 清空特定前缀的key
+docker exec stock-redis redis-cli --eval "return redis.call('del', unpack(redis.call('keys', 'stock:*')))"
+```
+
 ## 文件位置速查
 
 | 功能 | 文件路径 |
@@ -134,6 +215,7 @@ docker-compose up -d <service-name>
 | 指数数据聚合 | `stock-backend/src/main/java/com/stock/platform/service/StockDataService.java` |
 | Docker配置 | `docker-compose.yml` |
 | 前端API定义 | `stock-frontend/src/api/stock.ts` |
+| Skill文件 | `.trae/skills/stock-platform/SKILL.md` |
 
 ## 注意事项
 
@@ -141,3 +223,4 @@ docker-compose up -d <service-name>
 2. **数据格式**: 腾讯API返回的涨跌幅已经是百分比值（如0.07表示0.07%）
 3. **编码问题**: 腾讯API返回GBK编码，需要正确解码
 4. **缓存策略**: 实时数据有60秒缓存，API失败时自动降级使用缓存
+5. **数据库密码**: 生产环境请修改默认密码 `@Syh20050608`
