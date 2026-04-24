@@ -207,26 +207,32 @@ public class StockController {
 
         if (klineData == null || klineData.isEmpty()) {
             // 缓存未命中，尝试从API获取
-            log.debug("K线缓存未命中，从API获取: {}, 周期: {}", symbol, period);
+            log.info("K线缓存未命中，从API获取: {}, 周期: {}", symbol, period);
 
             // 优先使用东方财富API
             klineData = eastMoneyStockService.getKlineData(symbol, period);
+            log.info("东方财富API返回: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
+
             if (klineData.isEmpty()) {
                 // 如果东方财富API失败，尝试腾讯API
+                log.info("东方财富API返回空，尝试腾讯API: {}, 周期: {}", symbol, period);
                 klineData = tencentStockDataService.getKlineDataFromTencent(symbol, period);
+                log.info("腾讯API返回: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
             }
             if (klineData.isEmpty()) {
                 // 如果都失败，使用本地数据库
+                log.info("API都返回空，使用本地数据库: {}, 周期: {}", symbol, period);
                 klineData = stockDataService.getKlineData(symbol, period, limit);
+                log.info("本地数据库返回: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
             }
 
             // 将获取到的数据缓存（24小时）
             if (klineData != null && !klineData.isEmpty()) {
                 stockCacheService.cacheKlineData(symbol, period, klineData);
-                log.debug("K线数据已缓存: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
+                log.info("K线数据已缓存: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
             }
         } else {
-            log.debug("K线数据从缓存获取: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
+            log.info("K线数据从缓存获取: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
         }
 
         return ResponseEntity.ok(ApiResponse.success(klineData));
