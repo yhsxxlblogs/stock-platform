@@ -482,8 +482,12 @@ public class TencentStockDataService {
             String tencentSymbol = convertToTencentSymbol(symbol);
             String klineType = convertPeriodToKlineType(period);
 
-            String url = String.format("%s?param=%s,%s,,,%s", 
+            // 腾讯K线API格式：需要带复权参数 qfq（前复权）
+            // 格式：param=股票代码,类型,,,数量,复权类型
+            String url = String.format("%s?param=%s,%s,,,%s,qfq", 
                     TENCENT_KLINE_API, tencentSymbol, klineType, getLimitByPeriod(period));
+
+            log.info("调用腾讯K线API: {}, URL: {}", tencentSymbol, url);
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", "Mozilla/5.0");
@@ -495,7 +499,17 @@ public class TencentStockDataService {
 
             if (response.getBody() != null) {
                 JsonNode root = objectMapper.readTree(response.getBody());
-                JsonNode data = root.path("data").path(tencentSymbol).path(klineType);
+                
+                // 检查返回码
+                int code = root.path("code").asInt();
+                if (code != 0) {
+                    log.warn("腾讯K线API返回错误: code={}, msg={}", code, root.path("msg").asText());
+                    return result;
+                }
+
+                // 前复权数据在 qfqday 字段中
+                String dataField = "qfq" + klineType;
+                JsonNode data = root.path("data").path(tencentSymbol).path(dataField);
 
                 if (data.isArray()) {
                     for (JsonNode item : data) {
@@ -516,10 +530,13 @@ public class TencentStockDataService {
 
                         result.add(dto);
                     }
+                    log.info("腾讯K线API返回成功: {}, 条数: {}", tencentSymbol, result.size());
+                } else {
+                    log.warn("腾讯K线API返回数据格式不正确: {}", tencentSymbol);
                 }
             }
         } catch (Exception e) {
-            log.error("Get腾讯K线数据Failed: {}", e.getMessage());
+            log.error("Get腾讯K线数据Failed: {}, 错误: {}", symbol, e.getMessage());
         }
         return result;
     }
