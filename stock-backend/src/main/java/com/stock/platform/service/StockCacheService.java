@@ -127,8 +127,19 @@ public class StockCacheService {
      */
     public void cacheKlineData(String symbol, String period, List<KlineDataDTO> data) {
         String key = RedisConfig.CACHE_STOCK_KLINE + ":" + symbol + ":" + period;
-        redisCacheService.set(key, data, 24, TimeUnit.HOURS);
-        log.debug("缓存K线数据: {}, 周期: {}, 条数: {}", symbol, period, data.size());
+        log.info("准备缓存K线数据: key={}, 条数={}", key, data.size());
+        try {
+            redisCacheService.set(key, data, 24, TimeUnit.HOURS);
+            // 验证是否写入成功
+            List<KlineDataDTO> cached = getCachedKlineData(symbol, period);
+            if (cached != null && !cached.isEmpty()) {
+                log.info("K线数据缓存成功: key={}, 验证条数={}", key, cached.size());
+            } else {
+                log.error("K线数据缓存失败: key={}, 写入后读取为空", key);
+            }
+        } catch (Exception e) {
+            log.error("K线数据缓存异常: key={}, 错误={}", key, e.getMessage(), e);
+        }
     }
 
     /**

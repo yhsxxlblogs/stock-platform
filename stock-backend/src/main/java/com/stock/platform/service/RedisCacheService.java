@@ -40,10 +40,12 @@ public class RedisCacheService {
      */
     public void set(String key, Object value, long timeout, TimeUnit unit) {
         try {
+            log.info("Redis写入开始: key={}, valueType={}", key, value != null ? value.getClass().getSimpleName() : "null");
             redisTemplate.opsForValue().set(key, value, timeout, unit);
-            log.debug("Set缓存: key={}, timeout={} {}", key, timeout, unit);
+            log.info("Redis写入成功: key={}, timeout={} {}", key, timeout, unit);
         } catch (Exception e) {
-            log.error("Set缓存Failed: key={}, error={}", key, e.getMessage());
+            log.error("Redis写入失败: key={}, error={}", key, e.getMessage(), e);
+            throw e;
         }
     }
 
