@@ -29,8 +29,9 @@ spring:
         format_sql: false
     open-in-view: false
   
+  # Redis配置 - 生产环境通过环境变量覆盖
   redis:
-    host: ${SPRING_REDIS_HOST:localhost}
+    host: ${SPRING_REDIS_HOST:redis}
     port: ${SPRING_REDIS_PORT:6379}
     password: ${SPRING_REDIS_PASSWORD:}
     database: 0
@@ -48,7 +49,7 @@ spring:
     cache:
       type: redis
       redis:
-        time-to-live: 1800000  # 默认缓存过期时间 30 分钟
+        time-to-live: 1800000
         cache-null-values: false
         use-key-prefix: true
         key-prefix: "stock:"
