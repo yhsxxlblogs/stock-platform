@@ -51,8 +51,9 @@ services:
     container_name: stock-redis
     restart: unless-stopped
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes --bind 0.0.0.0 --protected-mode no
-    ports:
-      - "6379:6379"
+    # 不映射端口到宿主机，只允许容器间通信（避免与宿主机Redis冲突）
+    # ports:
+    #   - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
