@@ -83,7 +83,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-stock_platform}?useSSL=false&serverTimezone=${TZ:-Asia/Shanghai}&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-@Syh20050608}
-      SPRING_REDIS_HOST: stock-redis
+      SPRING_REDIS_HOST: 172.20.0.2
       SPRING_REDIS_PORT: 6379
       SERVER_PORT: 9090
       SERVER_SERVLET_CONTEXT_PATH: /api
