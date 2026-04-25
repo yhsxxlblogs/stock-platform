@@ -50,7 +50,9 @@ services:
     image: redis:7-alpine
     container_name: stock-redis
     restart: unless-stopped
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes --bind 0.0.0.0 --protected-mode no
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -59,8 +61,8 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
     deploy:
       resources:
         limits:
