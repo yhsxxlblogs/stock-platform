@@ -130,14 +130,14 @@
               <span class="trade-volume">数量</span>
             </div>
             <!-- 卖五到卖一 -->
-            <div v-for="(level, index) in askLevels" :key="'ask'+level.level" class="trade-item ask" :class="{ 'trade-flash': flashingAskLevels.has(index) }">
+            <div v-for="(level, index) in askLevels" :key="'ask'+level.level" class="trade-item ask" :class="{ 'trade-flash': isAskFlashing(index) }">
               <span class="trade-label">卖{{ level.level }}</span>
               <span class="trade-price" :class="getPriceClass(level.price)">{{ level.price?.toFixed(2) || '-' }}</span>
               <span class="trade-volume">{{ level.volumeDisplay || formatTradeVolume(level.volume) }}</span>
             </div>
             <el-divider />
             <!-- 买一到买五 -->
-            <div v-for="(level, index) in bidLevels" :key="'bid'+level.level" class="trade-item bid" :class="{ 'trade-flash': flashingBidLevels.has(index) }">
+            <div v-for="(level, index) in bidLevels" :key="'bid'+level.level" class="trade-item bid" :class="{ 'trade-flash': isBidFlashing(index) }">
               <span class="trade-label">买{{ level.level }}</span>
               <span class="trade-price" :class="getPriceClass(level.price)">{{ level.price?.toFixed(2) || '-' }}</span>
               <span class="trade-volume">{{ level.volumeDisplay || formatTradeVolume(level.volume) }}</span>
@@ -581,6 +581,10 @@ watch(chartType, () => {
 // 买卖盘口闪烁动画状态
 const flashingBidLevels = ref<Set<number>>(new Set())
 const flashingAskLevels = ref<Set<number>>(new Set())
+
+// 用于模板的闪烁状态检查函数
+const isBidFlashing = (index: number): boolean => flashingBidLevels.value.has(index)
+const isAskFlashing = (index: number): boolean => flashingAskLevels.value.has(index)
 
 // WebSocket 实时数据更新
 const setupWebSocket = () => {
