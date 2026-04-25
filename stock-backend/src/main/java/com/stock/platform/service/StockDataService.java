@@ -204,6 +204,17 @@ public class StockDataService {
 
     @Transactional(readOnly = true)
     public List<KlineDataDTO> getKlineData(String symbol, String period, int limit) {
+        // 优先从腾讯API获取K线数据
+        List<KlineDataDTO> klineData = tencentStockDataService.getKlineDataFromTencent(symbol, period);
+        
+        if (klineData != null && !klineData.isEmpty()) {
+            log.info("从腾讯API获取K线数据成功: {}, 周期: {}, 条数: {}", symbol, period, klineData.size());
+            return klineData;
+        }
+        
+        // 如果API获取失败，从数据库获取
+        log.warn("从腾讯API获取K线数据失败，尝试从数据库获取: {}, 周期: {}", symbol, period);
+        
         Stock stock = stockRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new RuntimeException("股票不存在: " + symbol));
 
