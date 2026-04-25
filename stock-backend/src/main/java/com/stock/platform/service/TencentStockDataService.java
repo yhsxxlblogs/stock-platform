@@ -919,11 +919,19 @@ public class TencentStockDataService {
     }
 
     private String convertPeriodToKlineType(String period) {
-        switch (period) {
-            case "day": return "day";
-            case "week": return "week";
-            case "month": return "month";
-            default: return "day";
+        switch (period.toLowerCase()) {
+            case "1m":
+            case "3m":
+            case "6m":
+            case "1y":
+            case "day":
+                return "day";
+            case "week":
+                return "week";
+            case "month":
+                return "month";
+            default:
+                return "day";
         }
     }
 

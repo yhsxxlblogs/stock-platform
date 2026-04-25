@@ -145,17 +145,24 @@ public class StockCacheService {
     /**
      * 获取缓存的K线数据
      */
-    @SuppressWarnings("unchecked")
     public List<KlineDataDTO> getCachedKlineData(String symbol, String period) {
         String key = RedisConfig.CACHE_STOCK_KLINE + ":" + symbol + ":" + period;
         log.info("尝试从缓存获取K线数据: key={}", key);
-        List<KlineDataDTO> data = redisCacheService.get(key, List.class);
-        if (data != null && !data.isEmpty()) {
-            log.info("从缓存获取K线数据成功: {}, 周期: {}, 条数: {}", symbol, period, data.size());
-        } else {
-            log.info("缓存未命中: {}, 周期: {}", symbol, period);
+        try {
+            // 使用 TypeReference 来保留泛型类型信息
+            com.fasterxml.jackson.core.type.TypeReference<List<KlineDataDTO>> typeRef = 
+                new com.fasterxml.jackson.core.type.TypeReference<List<KlineDataDTO>>() {};
+            List<KlineDataDTO> data = redisCacheService.get(key, typeRef);
+            if (data != null && !data.isEmpty()) {
+                log.info("从缓存获取K线数据成功: {}, 周期: {}, 条数: {}", symbol, period, data.size());
+                return data;
+            } else {
+                log.info("缓存未命中或为空: {}, 周期: {}", symbol, period);
+            }
+        } catch (Exception e) {
+            log.error("从缓存获取K线数据失败: {}, 周期: {}, 错误: {}", symbol, period, e.getMessage());
         }
-        return data;
+        return null;
     }
 
     /**
